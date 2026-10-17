@@ -1,6 +1,7 @@
 // Accès à l'API : jeton dans l'en-tête, année scolaire choisie ajoutée aux requêtes, erreurs en français.
 
-export const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:4000/api';
+// Fixée à la construction (next.config.ts : NEXT_PUBLIC_API_URL, ou VITE_API_URL de l'ancien site).
+export const API_URL = process.env.CETIC_API_URL ?? 'http://localhost:4000/api';
 
 const CLE_JETON = 'cetic-jeton';
 const CLE_ANNEE = 'cetic-annee';

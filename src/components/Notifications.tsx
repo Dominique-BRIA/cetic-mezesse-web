@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { Bell } from 'lucide-react';
@@ -22,7 +22,8 @@ function quand(d: string): string {
 // Cloche des notifications (RG-32) : relevée chaque minute, la liste s'ouvre au clic.
 export function Cloche() {
   const client = useQueryClient();
-  const naviguer = useNavigate();
+  const routeur = useRouter();
+  const naviguer = (vers: string) => routeur.push(vers);
   const [ouverte, setOuverte] = useState(false);
   const q = useQuery({
     queryKey: ['notifications'],

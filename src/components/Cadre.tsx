@@ -1,5 +1,6 @@
-import { useEffect, useState, type ComponentType } from 'react';
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { useEffect, useState, type ComponentType, type ReactNode } from 'react';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 import clsx from 'clsx';
 import {
   BarChart3,
@@ -95,12 +96,23 @@ const SECTIONS: { titre: string | null; liens: Lien[] }[] = [
   },
 ];
 
-export function Cadre() {
+/** Lien du menu, mis en évidence quand sa page est ouverte (« / » seulement sur l'accueil). */
+function LienNav({ vers, className, title, children }: { vers: string; className: (actif: boolean) => string; title?: string; children: ReactNode }) {
+  const chemin = usePathname();
+  const actif = vers === '/' ? chemin === '/' : chemin === vers || chemin.startsWith(`${vers}/`);
+  return (
+    <Link href={vers} className={className(actif)} title={title} aria-current={actif ? 'page' : undefined}>
+      {children}
+    </Link>
+  );
+}
+
+export function Cadre({ children }: { children: ReactNode }) {
   const { utilisateur, deconnecter, annees, annee, choisirAnnee, theme, basculerTheme } = useApp();
   const [menuOuvert, setMenuOuvert] = useState(false);
-  const lieu = useLocation();
-  const naviguer = useNavigate();
-  useEffect(() => setMenuOuvert(false), [lieu.pathname]);
+  const chemin = usePathname();
+  const routeur = useRouter();
+  useEffect(() => setMenuOuvert(false), [chemin]);
   if (!utilisateur) return null;
 
   const sections = SECTIONS.map((s) => ({ ...s, liens: s.liens.filter((l) => l.roles.includes(utilisateur.role)) })).filter(
@@ -140,13 +152,12 @@ export function Cadre() {
             <ul className="space-y-0.5">
               {s.liens.map((l) => (
                 <li key={l.vers}>
-                  <NavLink
-                    to={l.vers}
-                    end={l.vers === '/'}
-                    className={({ isActive }) =>
+                  <LienNav
+                    vers={l.vers}
+                    className={(actif) =>
                       clsx(
                         'flex items-center gap-2.5 rounded px-2 py-[0.42rem] text-sm transition-colors',
-                        isActive
+                        actif
                           ? 'bg-primaire-pale font-semibold text-primaire'
                           : 'text-encre-2 hover:bg-surface-2 hover:text-encre',
                       )
@@ -154,7 +165,7 @@ export function Cadre() {
                   >
                     <l.icone className="h-4 w-4 shrink-0" />
                     {l.libelle}
-                  </NavLink>
+                  </LienNav>
                 </li>
               ))}
             </ul>
@@ -163,23 +174,21 @@ export function Cadre() {
       </nav>
 
       <div className="border-t border-bord px-3 py-3">
-        <NavLink
-          to="/profil"
+        <LienNav
+          vers="/profil"
           title="Mon profil"
-          className={({ isActive }) =>
-            clsx('block rounded px-1 py-0.5 hover:bg-surface-2', isActive && 'bg-primaire-pale text-primaire')
-          }
+          className={(actif) => clsx('block rounded px-1 py-0.5 hover:bg-surface-2', actif && 'bg-primaire-pale text-primaire')}
         >
           <div className="truncate text-sm font-semibold">
             {utilisateur.prenom} {utilisateur.nom}
           </div>
           <div className="text-xs text-encre-2">{ROLES[utilisateur.role]} · Mon profil</div>
-        </NavLink>
+        </LienNav>
         <div className="mt-2 flex items-center gap-1">
           <button type="button" className="bouton-discret" onClick={basculerTheme} title={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}>
             {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </button>
-          <button type="button" className="bouton-discret" onClick={() => naviguer('/mot-de-passe')} title="Changer mon mot de passe">
+          <button type="button" className="bouton-discret" onClick={() => routeur.push('/mot-de-passe')} title="Changer mon mot de passe">
             <KeyRound className="h-4 w-4" />
           </button>
           <button type="button" className="bouton-discret ml-auto" onClick={deconnecter}>
@@ -219,7 +228,7 @@ export function Cadre() {
         </div>
         <main className="px-3 py-4 sm:px-6 sm:py-7">
           <div className="mx-auto max-w-[1240px] rounded-lg border border-bord bg-surface px-4 py-5 shadow-feuille sm:px-7 sm:py-6">
-            <Outlet />
+            {children}
           </div>
         </main>
       </div>
