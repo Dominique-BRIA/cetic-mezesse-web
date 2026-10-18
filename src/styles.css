@@ -96,6 +96,53 @@ body {
   }
 }
 
+/* Squelettes : la forme du contenu à venir, qui pulse doucement pendant le chargement. */
+.squelette {
+  border-radius: 4px;
+  background: rgb(var(--bord) / 0.7);
+  animation: squelette 1.4s ease-in-out infinite;
+}
+@keyframes squelette {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* Barre de navigation : avance dès le clic sur un lien, jusqu'à l'ouverture de la page. */
+.barre-navigation {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 60;
+  height: 3px;
+  pointer-events: none;
+}
+.barre-navigation > div {
+  height: 100%;
+  width: 90%;
+  background: rgb(var(--primaire));
+  transform-origin: left;
+  animation: barre-navigation 6s cubic-bezier(0.1, 0.7, 0.3, 1) forwards;
+}
+@keyframes barre-navigation {
+  from {
+    transform: scaleX(0.05);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .squelette,
+  .barre-navigation > div {
+    animation: none;
+  }
+  .barre-navigation > div {
+    transform: none;
+    opacity: 0.6;
+  }
+}
+
 /* Barres de défilement discrètes */
 * {
   scrollbar-width: thin;

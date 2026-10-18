@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { api } from '../../lib/api';
+import { requetes } from '../../lib/requetes';
 import { useApp } from '../../lib/contexte';
 import { date } from '../../lib/format';
 import type { Inscription } from '../../lib/types';
@@ -10,7 +10,7 @@ import { Reintegration } from './FicheEleve';
 
 export default function Renvoyes() {
   const { a, annee } = useApp();
-  const q = useQuery({ queryKey: ['eleves', annee?.id, 'renvoyes'], queryFn: () => api<Inscription[]>('/eleves?statut=RENVOYE') });
+  const q = useQuery(requetes.renvoyes(annee?.id));
   const [choix, setChoix] = useState<Inscription | null>(null);
 
   return (

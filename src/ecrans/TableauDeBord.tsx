@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowRight } from 'lucide-react';
 import { api } from '../lib/api';
+import { requetes } from '../lib/requetes';
 import { useApp } from '../lib/contexte';
 import { note, pourcent } from '../lib/format';
 import type { CodePeriode, Sequence } from '../lib/types';
@@ -22,7 +23,7 @@ export interface Avancement {
 
 export default function TableauDeBord() {
   const { utilisateur, annee } = useApp();
-  const avancement = useQuery({ queryKey: ['avancement', annee?.id], queryFn: () => api<Avancement>('/notes/avancement') });
+  const avancement = useQuery(requetes.avancement<Avancement>(annee?.id));
   const ouverte = annee?.sequences.find((s) => s.saisieOuverte) ?? null;
   const salutation = `Bonjour, ${utilisateur!.prenom}`;
 

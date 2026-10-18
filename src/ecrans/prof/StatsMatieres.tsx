@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../lib/api';
+import { requetes } from '../../lib/requetes';
 import { useApp } from '../../lib/contexte';
 import { classeNote, note, pourcent, rang } from '../../lib/format';
-import type { CodePeriode, Matiere, Rang, Resume, Sexe } from '../../lib/types';
+import type { CodePeriode, Rang, Resume, Sexe } from '../../lib/types';
 import { Carte, Chargement, Champ, ChoixPeriode, Erreur, Indicateur, Page, Vide } from '../../components/ui';
 import { Evolution, ParSexe, Repartition } from '../../components/Graphiques';
 
@@ -19,7 +20,7 @@ export interface StatsMatiere {
 
 export default function StatsMatieres() {
   const { annee } = useApp();
-  const matieres = useQuery({ queryKey: ['matieres', 'miennes', annee?.id], queryFn: () => api<Matiere[]>('/matieres') });
+  const matieres = useQuery(requetes.mesMatieres(annee?.id));
   const [choix, setChoix] = useState('');
   const [periode, setPeriode] = useState<CodePeriode>('S1');
   const matiereId = choix || matieres.data?.[0]?.id || '';

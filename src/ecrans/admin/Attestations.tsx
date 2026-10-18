@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { FileText, Loader2, Plus, Printer } from 'lucide-react';
 import { api, telecharger } from '../../lib/api';
+import { requetes } from '../../lib/requetes';
 import { date } from '../../lib/format';
 import type { Attestation, Enseignant } from '../../lib/types';
 import { Carte, Chargement, Champ, Erreur, Modale, Page, Vide } from '../../components/ui';
@@ -13,7 +14,7 @@ const imprimer = (a: Attestation) => telecharger(`/attestations/${a.id}/pdf`, { 
 // Attestations de présence effective au poste : le Directeur les délivre et en garde le registre.
 export default function Attestations() {
   const [nouvelle, setNouvelle] = useState(false);
-  const q = useQuery({ queryKey: ['attestations'], queryFn: () => api<Attestation[]>('/attestations', { annee: false }) });
+  const q = useQuery(requetes.attestations());
 
   return (
     <Page

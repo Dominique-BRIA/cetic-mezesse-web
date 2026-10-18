@@ -3,7 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Loader2, Plus, Trash2 } from 'lucide-react';
 import { api } from '../../lib/api';
-import type { Bareme, Etablissement } from '../../lib/types';
+import { requetes } from '../../lib/requetes';
+import type { Etablissement } from '../../lib/types';
 import { Carte, Chargement, Champ, Erreur, Page } from '../../components/ui';
 import { useApp } from '../../lib/contexte';
 
@@ -25,7 +26,7 @@ export default function Parametres() {
 
 function SeuilTableauHonneur() {
   const client = useQueryClient();
-  const q = useQuery({ queryKey: ['etablissement'], queryFn: () => api<Etablissement | null>('/etablissement', { annee: false }) });
+  const q = useQuery(requetes.etablissement());
   const [seuil, setSeuil] = useState('');
   useEffect(() => {
     if (q.data) setSeuil(q.data.seuilTableauHonneur.toFixed(2).replace('.', ','));
@@ -77,7 +78,7 @@ const CHAMPS: [keyof Etablissement, string, string?][] = [
 
 function FormEtablissement({ modifiable }: { modifiable: boolean }) {
   const client = useQueryClient();
-  const q = useQuery({ queryKey: ['etablissement'], queryFn: () => api<Etablissement | null>('/etablissement', { annee: false }) });
+  const q = useQuery(requetes.etablissement());
   const [f, setF] = useState<Record<string, string>>({});
   useEffect(() => {
     if (q.data) setF(Object.fromEntries(Object.entries(q.data).map(([k, v]) => [k, v === null ? '' : String(v)])));
@@ -120,7 +121,7 @@ function FormEtablissement({ modifiable }: { modifiable: boolean }) {
 
 function EditeurBareme({ type, titre, aide, modifiable }: { type: 'GRADE' | 'COTE'; titre: string; aide: string; modifiable: boolean }) {
   const client = useQueryClient();
-  const q = useQuery({ queryKey: ['baremes'], queryFn: () => api<Bareme[]>('/baremes', { annee: false }) });
+  const q = useQuery(requetes.baremes());
   const [lignes, setLignes] = useState<{ libelle: string; libelleLong: string; min: string }[]>([]);
   useEffect(() => {
     if (q.data)

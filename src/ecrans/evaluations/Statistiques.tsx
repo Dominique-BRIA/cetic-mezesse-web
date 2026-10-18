@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { api } from '../../lib/api';
+import { requetes } from '../../lib/requetes';
 import { useApp } from '../../lib/contexte';
 import { classeNote, note, pourcent, rang } from '../../lib/format';
 import type { Classe, CodePeriode, Matiere, Profil, Rang, Resume, Sexe } from '../../lib/types';
@@ -75,10 +76,7 @@ export default function Statistiques() {
 
 function VueEtablissement({ periode }: { periode: CodePeriode }) {
   const { annee } = useApp();
-  const q = useQuery({
-    queryKey: ['stats-etab', annee?.id, periode],
-    queryFn: () => api<StatsEtablissement>(`/statistiques/etablissement?periode=${periode}`),
-  });
+  const q = useQuery(requetes.statsEtablissement<StatsEtablissement>(annee?.id, periode));
   if (q.isLoading) return <Chargement />;
   if (q.error) return <Erreur erreur={q.error} />;
   const s = q.data!;

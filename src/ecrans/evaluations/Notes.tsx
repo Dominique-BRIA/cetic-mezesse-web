@@ -5,9 +5,10 @@ import { toast } from 'sonner';
 import clsx from 'clsx';
 import { FileSpreadsheet } from 'lucide-react';
 import { api, telecharger } from '../../lib/api';
+import { requetes } from '../../lib/requetes';
 import { useApp } from '../../lib/contexte';
 import { classeNote, libellePeriode, note, pourcent, rang } from '../../lib/format';
-import type { Classe, CodePeriode, Profil, Rang } from '../../lib/types';
+import type { CodePeriode, Profil, Rang } from '../../lib/types';
 import { Carte, Chargement, Champ, ChoixPeriode, Erreur, Page, Vide } from '../../components/ui';
 import { ListeManquantes, type Manquantes } from '../prof/Manquantes';
 
@@ -20,7 +21,7 @@ interface Releve {
 
 export default function Notes() {
   const { annee } = useApp();
-  const classes = useQuery({ queryKey: ['classes', annee?.id], queryFn: () => api<Classe[]>('/classes') });
+  const classes = useQuery(requetes.classes(annee?.id));
   const [choix, setChoix] = useState('');
   const [periode, setPeriode] = useState<CodePeriode>('S1');
   const [vue, setVue] = useState<'releve' | 'manquantes'>('releve');

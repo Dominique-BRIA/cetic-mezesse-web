@@ -81,7 +81,45 @@ export function Carte({
   );
 }
 
-export function Chargement({ texte = 'Chargement…' }: { texte?: string }) {
+/** Données en cours de chargement : des lignes grises à la place du tableau ou de la liste attendus. */
+export function Chargement({ texte = 'Chargement…', lignes = 5 }: { texte?: string; lignes?: number }) {
+  return (
+    <div className="space-y-2.5 py-3" role="status" aria-live="polite">
+      {texte && <span className="sr-only">{texte}</span>}
+      <div className="squelette h-8 w-full opacity-80" />
+      {Array.from({ length: lignes }, (_, i) => (
+        <div key={i} className="flex items-center gap-3">
+          <div className="squelette h-6 w-[22%]" />
+          <div className="squelette h-6 flex-1" style={{ maxWidth: `${62 - (i % 3) * 9}%` }} />
+          <div className="squelette ml-auto h-6 w-[12%]" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Page entière en cours d'ouverture : titre, filtres et tableau, à leur place. */
+export function SquelettePage() {
+  return (
+    <div className="space-y-5" role="status" aria-live="polite">
+      <span className="sr-only">Ouverture de la page…</span>
+      <div className="border-b border-bord pb-4">
+        <div className="squelette h-7 w-56" />
+        <div className="squelette mt-2.5 h-4 w-[min(32rem,80%)]" />
+      </div>
+      <div className="flex flex-wrap gap-3">
+        <div className="squelette h-10 w-44" />
+        <div className="squelette h-10 w-56" />
+      </div>
+      <div className="rounded-lg border border-bord px-4 py-2">
+        <Chargement lignes={6} texte="" />
+      </div>
+    </div>
+  );
+}
+
+/** Attente sans forme connue (ouverture de la session) : une roue et un texte. */
+export function Patienter({ texte }: { texte: string }) {
   return (
     <div className="flex items-center gap-2 py-10 text-sm text-encre-2" role="status">
       <Loader2 className="h-4 w-4 animate-spin" />

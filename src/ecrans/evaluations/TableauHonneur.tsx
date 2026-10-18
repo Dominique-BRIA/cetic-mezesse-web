@@ -3,10 +3,11 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Award, FileText } from 'lucide-react';
-import { api, telecharger } from '../../lib/api';
+import { telecharger } from '../../lib/api';
+import { requetes } from '../../lib/requetes';
 import { useApp } from '../../lib/contexte';
 import { libellePeriode, note, rang } from '../../lib/format';
-import type { Classe, CodePeriode, TableauHonneur as Tableau } from '../../lib/types';
+import type { CodePeriode } from '../../lib/types';
 import { Carte, Chargement, Champ, ChoixPeriode, Erreur, Page, Vide } from '../../components/ui';
 
 // Tableau d'honneur : élèves dont la moyenne de la période atteint le seuil réglé dans les Paramètres.
@@ -14,12 +15,9 @@ export default function TableauHonneur() {
   const { annee } = useApp();
   const [periode, setPeriode] = useState<CodePeriode>('T1');
   const [classeId, setClasseId] = useState('');
-  const classes = useQuery({ queryKey: ['classes', annee?.id], queryFn: () => api<Classe[]>('/classes') });
+  const classes = useQuery(requetes.classes(annee?.id));
   const filtre = `periode=${periode}${classeId ? `&classeId=${classeId}` : ''}`;
-  const q = useQuery({
-    queryKey: ['tableau-honneur', annee?.id, periode, classeId],
-    queryFn: () => api<Tableau>(`/tableau-honneur?${filtre}`),
-  });
+  const q = useQuery(requetes.tableauHonneur(annee?.id, periode, classeId));
   const imprimer = (format: 'liste' | 'certificats') =>
     telecharger(`/tableau-honneur/pdf?${filtre}&format=${format}`, { ouvrir: true }).catch((e: Error) => toast.error(e.message));
   const vide = !q.data?.total;

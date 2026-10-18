@@ -1,6 +1,7 @@
 import { useEffect, useState, type ComponentType, type ReactNode } from 'react';
-import Link from 'next/link';
+import Link, { useLinkStatus } from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
 import {
   Award,
@@ -14,6 +15,7 @@ import {
   Layers,
   LayoutDashboard,
   ListChecks,
+  Loader2,
   LogOut,
   Menu,
   Moon,
@@ -32,6 +34,8 @@ import {
 } from 'lucide-react';
 import { useApp } from '../lib/contexte';
 import { libelleRole } from '../lib/format';
+import { precharger } from '../lib/requetes';
+import { BarreNavigation } from './BarreNavigation';
 import type { Role } from '../lib/types';
 import { MotifFond } from './MotifFond';
 import { Marque } from './Marque';
@@ -101,14 +105,46 @@ const SECTIONS: { titre: string | null; liens: Lien[] }[] = [
 ];
 
 /** Lien du menu, mis en évidence quand sa page est ouverte (« / » seulement sur l'accueil). */
-function LienNav({ vers, className, title, children }: { vers: string; className: (actif: boolean) => string; title?: string; children: ReactNode }) {
+function LienNav({
+  vers,
+  className,
+  title,
+  children,
+  surClic,
+}: {
+  vers: string;
+  className: (actif: boolean) => string;
+  title?: string;
+  children: ReactNode;
+  surClic?: () => void;
+}) {
   const chemin = usePathname();
+  const client = useQueryClient();
+  const { annee } = useApp();
   const actif = vers === '/' ? chemin === '/' : chemin === vers || chemin.startsWith(`${vers}/`);
+  // Les données de la page sont demandées dès le survol (ou le toucher), avant même le clic.
+  const prechargerPage = () => precharger(client, vers, annee?.id);
   return (
-    <Link href={vers} className={className(actif)} title={title} aria-current={actif ? 'page' : undefined}>
+    <Link
+      href={vers}
+      className={className(actif)}
+      title={title}
+      aria-current={actif ? 'page' : undefined}
+      onMouseEnter={prechargerPage}
+      onFocus={prechargerPage}
+      onTouchStart={prechargerPage}
+      onClick={surClic}
+    >
       {children}
+      <EtatLien />
     </Link>
   );
+}
+
+/** Petite roue sur le lien cliqué, tant que sa page n'est pas affichée. */
+function EtatLien() {
+  const { pending } = useLinkStatus();
+  return pending ? <Loader2 className="ml-auto h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden /> : null;
 }
 
 export function Cadre({ children }: { children: ReactNode }) {
@@ -158,6 +194,7 @@ export function Cadre({ children }: { children: ReactNode }) {
                 <li key={l.vers}>
                   <LienNav
                     vers={l.vers}
+                    surClic={() => setMenuOuvert(false)}
                     className={(actif) =>
                       clsx(
                         'flex items-center gap-2.5 rounded px-2 py-[0.42rem] text-sm transition-colors',
@@ -181,6 +218,7 @@ export function Cadre({ children }: { children: ReactNode }) {
         <LienNav
           vers="/profil"
           title="Mon profil"
+          surClic={() => setMenuOuvert(false)}
           className={(actif) => clsx('block rounded px-1 py-0.5 hover:bg-surface-2', actif && 'bg-primaire-pale text-primaire')}
         >
           <div className="truncate text-sm font-semibold">
@@ -206,6 +244,7 @@ export function Cadre({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen">
+      <BarreNavigation />
       <MotifFond />
       {/* Barre latérale : fixe sur grand écran, tiroir sur mobile */}
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 border-r border-bord bg-surface lg:block">{barre}</aside>

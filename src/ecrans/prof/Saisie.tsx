@@ -5,9 +5,10 @@ import { toast } from 'sonner';
 import clsx from 'clsx';
 import { Loader2, Lock, Save } from 'lucide-react';
 import { api } from '../../lib/api';
+import { requetes } from '../../lib/requetes';
 import { useApp } from '../../lib/contexte';
 import { note } from '../../lib/format';
-import type { Matiere, Sequence, Sexe } from '../../lib/types';
+import type { Sequence, Sexe } from '../../lib/types';
 import { Carte, Chargement, Champ, Erreur, Etat, Page, Vide } from '../../components/ui';
 
 interface Feuille {
@@ -29,7 +30,7 @@ export function lireNote(s: string): number | null {
 export default function Saisie() {
   const { annee } = useApp();
   const [params, setParams] = useParametresUrl();
-  const matieres = useQuery({ queryKey: ['matieres', 'miennes', annee?.id], queryFn: () => api<Matiere[]>('/matieres') });
+  const matieres = useQuery(requetes.mesMatieres(annee?.id));
   const sequences = annee?.sequences ?? [];
   const matiereId = params.get('matiere') ?? matieres.data?.[0]?.id ?? '';
   const sequenceId = params.get('sequence') ?? sequences.find((s) => s.saisieOuverte)?.id ?? sequences[0]?.id ?? '';

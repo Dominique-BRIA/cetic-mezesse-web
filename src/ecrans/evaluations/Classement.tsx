@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { Search } from 'lucide-react';
-import { api } from '../../lib/api';
+import { requetes } from '../../lib/requetes';
 import { useApp } from '../../lib/contexte';
 import { classeNote, libellePeriode, note, rang } from '../../lib/format';
 import type { CodePeriode } from '../../lib/types';
@@ -15,10 +15,7 @@ export default function Classement() {
   const [periode, setPeriode] = useState<CodePeriode>('S1');
   const [classe, setClasse] = useState('');
   const [filtre, setFiltre] = useState('');
-  const q = useQuery({
-    queryKey: ['stats-etab', annee?.id, periode],
-    queryFn: () => api<StatsEtablissement>(`/statistiques/etablissement?periode=${periode}`),
-  });
+  const q = useQuery(requetes.statsEtablissement<StatsEtablissement>(annee?.id, periode));
   const total = q.data?.classement.length ?? 0;
   const dernierRang = q.data?.classement[total - 1]?.rang.rang;
   const lignes = (q.data?.classement ?? []).filter(

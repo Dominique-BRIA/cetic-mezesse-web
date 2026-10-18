@@ -4,15 +4,16 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
 import { api, ErreurApi } from '../../lib/api';
+import { requetes } from '../../lib/requetes';
 import { useApp } from '../../lib/contexte';
-import type { Classe, Enseignant, Groupe, Matiere } from '../../lib/types';
+import type { Enseignant, Groupe, Matiere } from '../../lib/types';
 import { Carte, Chargement, Champ, Erreur, Modale, Page, Vide } from '../../components/ui';
 
 export default function Matieres() {
   const { a, annee } = useApp();
   const client = useQueryClient();
   const [params, setParams] = useParametresUrl();
-  const classes = useQuery({ queryKey: ['classes', annee?.id], queryFn: () => api<Classe[]>('/classes') });
+  const classes = useQuery(requetes.classes(annee?.id));
   const classeId = params.get('classe') ?? classes.data?.[0]?.id ?? '';
   const matieres = useQuery({
     queryKey: ['matieres', annee?.id, classeId],

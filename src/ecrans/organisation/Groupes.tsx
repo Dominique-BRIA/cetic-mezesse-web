@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
 import { api } from '../../lib/api';
+import { requetes } from '../../lib/requetes';
 import { useApp } from '../../lib/contexte';
 import type { Classe, Groupe } from '../../lib/types';
 import { Carte, Chargement, Champ, Erreur, Modale, Page, Vide } from '../../components/ui';
@@ -10,7 +11,7 @@ import { Carte, Chargement, Champ, Erreur, Modale, Page, Vide } from '../../comp
 export default function Groupes() {
   const { a, annee } = useApp();
   const client = useQueryClient();
-  const q = useQuery({ queryKey: ['groupes', annee?.id], queryFn: () => api<Groupe[]>('/groupes') });
+  const q = useQuery(requetes.groupes(annee?.id));
   const [edition, setEdition] = useState<Groupe | 'nouveau' | null>(null);
   const sg = a('SURVEILLANT_GENERAL');
   const suppression = useMutation({

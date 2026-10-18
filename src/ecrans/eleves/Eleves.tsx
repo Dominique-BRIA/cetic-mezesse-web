@@ -5,9 +5,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Camera, Download, FileSpreadsheet, FileText, Loader2, Plus, Search, Upload } from 'lucide-react';
 import { api, telecharger } from '../../lib/api';
+import { requetes } from '../../lib/requetes';
 import { useApp } from '../../lib/contexte';
 import { date } from '../../lib/format';
-import type { Classe, Inscription } from '../../lib/types';
+import type { Classe } from '../../lib/types';
 import { Carte, Chargement, Champ, Erreur, Modale, Page, Vide } from '../../components/ui';
 import { AjoutEleves } from './AjoutEleves';
 import { PhotosEleves } from './PhotosEleves';
@@ -21,11 +22,8 @@ export default function Eleves() {
   const [import_, setImport] = useState(false);
   const [photos, setPhotos] = useState(false);
 
-  const classes = useQuery({ queryKey: ['classes', annee?.id], queryFn: () => api<Classe[]>('/classes') });
-  const eleves = useQuery({
-    queryKey: ['eleves', annee?.id, classeId, recherche],
-    queryFn: () => api<Inscription[]>(`/eleves?classeId=${classeId}&q=${encodeURIComponent(recherche)}`),
-  });
+  const classes = useQuery(requetes.classes(annee?.id));
+  const eleves = useQuery(requetes.eleves(annee?.id, classeId, recherche));
 
   const exporter = (format: 'pdf' | 'xlsx') =>
     telecharger(`/documents/liste?classeId=${classeId}&format=${format}`, { ouvrir: format === 'pdf' }).catch((e) => toast.error(e.message));

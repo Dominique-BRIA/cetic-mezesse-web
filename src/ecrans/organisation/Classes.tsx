@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { FileSpreadsheet, FileText, Loader2, Pencil, Plus, Tags, Trash2 } from 'lucide-react';
 import { api, telecharger } from '../../lib/api';
+import { requetes } from '../../lib/requetes';
 import { useApp } from '../../lib/contexte';
 import { nomClasse } from '../../lib/format';
 import type { Classe, Enseignant, Specialite } from '../../lib/types';
@@ -11,7 +12,7 @@ import { Carte, Chargement, Champ, Erreur, Modale, Page, Vide } from '../../comp
 
 export default function Classes() {
   const { a, annee } = useApp();
-  const q = useQuery({ queryKey: ['classes', annee?.id], queryFn: () => api<Classe[]>('/classes') });
+  const q = useQuery(requetes.classes(annee?.id));
   const [edition, setEdition] = useState<Classe | 'nouvelle' | null>(null);
   const [specialites, setSpecialites] = useState(false);
   const sg = a('SURVEILLANT_GENERAL');

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { KeyRound, Loader2, Pencil, Plus, Search } from 'lucide-react';
 import { api } from '../../lib/api';
+import { requetes } from '../../lib/requetes';
 import { useApp } from '../../lib/contexte';
 import type { Enseignant } from '../../lib/types';
 import { Carte, Chargement, Champ, Erreur, Etat, Modale, Page, Vide } from '../../components/ui';
@@ -11,7 +12,7 @@ import { type Carriere, carriereDe, ChampsCarriere, corpsCarriere } from '../../
 export default function Enseignants() {
   const { a, annee } = useApp();
   const client = useQueryClient();
-  const q = useQuery({ queryKey: ['enseignants', annee?.id], queryFn: () => api<Enseignant[]>('/utilisateurs?role=PROFESSEUR') });
+  const q = useQuery(requetes.enseignants(annee?.id));
   const [edition, setEdition] = useState<Enseignant | 'nouveau' | null>(null);
   const [filtre, setFiltre] = useState('');
   const sg = a('SURVEILLANT_GENERAL');
