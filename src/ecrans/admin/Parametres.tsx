@@ -5,16 +5,56 @@ import { Loader2, Plus, Trash2 } from 'lucide-react';
 import { api } from '../../lib/api';
 import type { Bareme, Etablissement } from '../../lib/types';
 import { Carte, Chargement, Champ, Erreur, Page } from '../../components/ui';
+import { useApp } from '../../lib/contexte';
 
 export default function Parametres() {
+  // Le SG règle tout ; le Proviseur consulte, et règle le tableau d'honneur.
+  const { a } = useApp();
+  const sg = a('SURVEILLANT_GENERAL');
   return (
-    <Page titre="Paramètres" description="Ce qui s'imprime en tête des documents, et les barèmes appliqués aux notes.">
-      <FormEtablissement />
+    <Page titre="Paramètres" description="Ce qui s'imprime en tête des documents, les barèmes appliqués aux notes et le tableau d'honneur.">
+      <FormEtablissement modifiable={sg} />
+      <SeuilTableauHonneur />
       <div className="grid gap-4 lg:grid-cols-2">
-        <EditeurBareme type="GRADE" titre="Grades par matière" aide="Imprimés dans la colonne « Grade » du bulletin." />
-        <EditeurBareme type="COTE" titre="Cotes de la moyenne générale" aide="La cote obtenue est cochée dans le bloc « Travail de l'élève »." />
+        <EditeurBareme type="GRADE" titre="Grades par matière" aide="Imprimés dans la colonne « Grade » du bulletin." modifiable={sg} />
+        <EditeurBareme type="COTE" titre="Cotes de la moyenne générale" aide="La cote obtenue est cochée dans le bloc « Travail de l'élève »." modifiable={sg} />
       </div>
     </Page>
+  );
+}
+
+function SeuilTableauHonneur() {
+  const client = useQueryClient();
+  const q = useQuery({ queryKey: ['etablissement'], queryFn: () => api<Etablissement | null>('/etablissement', { annee: false }) });
+  const [seuil, setSeuil] = useState('');
+  useEffect(() => {
+    if (q.data) setSeuil(q.data.seuilTableauHonneur.toFixed(2).replace('.', ','));
+  }, [q.data]);
+  const envoi = useMutation({
+    mutationFn: () => api('/etablissement/tableau-honneur', { methode: 'PUT', corps: { seuil: Number(seuil.replace(',', '.')) }, annee: false }),
+    onSuccess: () => {
+      toast.success("Moyenne minimale du tableau d'honneur enregistrée.");
+      client.invalidateQueries({ queryKey: ['etablissement'] });
+      client.invalidateQueries({ queryKey: ['tableau-honneur'] });
+    },
+  });
+  return (
+    <Carte titre="Tableau d'honneur">
+      {envoi.error ? (
+        <div className="mb-3">
+          <Erreur erreur={envoi.error} />
+        </div>
+      ) : null}
+      <div className="flex flex-wrap items-end gap-3">
+        <Champ libelle="Moyenne minimale" aide="Un élève figure au tableau d'honneur dès que sa moyenne de la période atteint cette valeur.">
+          <input className="champ w-28 text-right tabular-nums" inputMode="decimal" value={seuil} onChange={(e) => setSeuil(e.target.value)} />
+        </Champ>
+        <button type="button" className="bouton-primaire mb-5" disabled={envoi.isPending || !seuil} onClick={() => envoi.mutate()}>
+          {envoi.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+          Enregistrer
+        </button>
+      </div>
+    </Carte>
   );
 }
 
@@ -22,6 +62,7 @@ const CHAMPS: [keyof Etablissement, string, string?][] = [
   ['nomFr', 'Nom (français)'],
   ['nomEn', 'Nom (anglais)'],
   ['sigle', 'Sigle'],
+  ['sigleEn', 'Sigle anglais', 'GTC'],
   ['code', 'Code / immatriculation'],
   ['regionFr', 'Région (français)', 'Sud'],
   ['regionEn', 'Région (anglais)', 'South'],
@@ -34,7 +75,7 @@ const CHAMPS: [keyof Etablissement, string, string?][] = [
   ['prefixeMatricule', 'Préfixe des matricules', 'Exemple : CTM donne CTM26-0001'],
 ];
 
-function FormEtablissement() {
+function FormEtablissement({ modifiable }: { modifiable: boolean }) {
   const client = useQueryClient();
   const q = useQuery({ queryKey: ['etablissement'], queryFn: () => api<Etablissement | null>('/etablissement', { annee: false }) });
   const [f, setF] = useState<Record<string, string>>({});
@@ -53,10 +94,12 @@ function FormEtablissement() {
     <Carte
       titre="Établissement"
       actions={
-        <button type="button" className="bouton-primaire" disabled={envoi.isPending} onClick={() => envoi.mutate()}>
-          {envoi.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-          Enregistrer
-        </button>
+        modifiable && (
+          <button type="button" className="bouton-primaire" disabled={envoi.isPending} onClick={() => envoi.mutate()}>
+            {envoi.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+            Enregistrer
+          </button>
+        )
       }
     >
       {envoi.error ? (
@@ -67,7 +110,7 @@ function FormEtablissement() {
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {CHAMPS.map(([cle, libelle, aide]) => (
           <Champ key={cle} libelle={libelle} aide={cle === 'prefixeMatricule' ? aide : undefined} className={cle === 'nomFr' || cle === 'nomEn' ? 'sm:col-span-2' : ''}>
-            <input className="champ" value={f[cle] ?? ''} onChange={(e) => setF({ ...f, [cle]: e.target.value })} />
+            <input className="champ" value={f[cle] ?? ''} disabled={!modifiable} onChange={(e) => setF({ ...f, [cle]: e.target.value })} />
           </Champ>
         ))}
       </div>
@@ -75,7 +118,7 @@ function FormEtablissement() {
   );
 }
 
-function EditeurBareme({ type, titre, aide }: { type: 'GRADE' | 'COTE'; titre: string; aide: string }) {
+function EditeurBareme({ type, titre, aide, modifiable }: { type: 'GRADE' | 'COTE'; titre: string; aide: string; modifiable: boolean }) {
   const client = useQueryClient();
   const q = useQuery({ queryKey: ['baremes'], queryFn: () => api<Bareme[]>('/baremes', { annee: false }) });
   const [lignes, setLignes] = useState<{ libelle: string; libelleLong: string; min: string }[]>([]);
@@ -106,10 +149,12 @@ function EditeurBareme({ type, titre, aide }: { type: 'GRADE' | 'COTE'; titre: s
     <Carte
       titre={titre}
       actions={
-        <button type="button" className="bouton-primaire" disabled={envoi.isPending} onClick={() => envoi.mutate()}>
-          {envoi.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-          Enregistrer
-        </button>
+        modifiable && (
+          <button type="button" className="bouton-primaire" disabled={envoi.isPending} onClick={() => envoi.mutate()}>
+            {envoi.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+            Enregistrer
+          </button>
+        )
       }
     >
       <p className="mb-3 text-sm text-encre-2">{aide} Chaque mention s'applique à partir de sa note minimale (incluse).</p>
@@ -118,6 +163,7 @@ function EditeurBareme({ type, titre, aide }: { type: 'GRADE' | 'COTE'; titre: s
           <Erreur erreur={envoi.error} />
         </div>
       ) : null}
+      <fieldset disabled={!modifiable}>
       <table className="tableau">
         <thead>
           <tr>
@@ -150,9 +196,12 @@ function EditeurBareme({ type, titre, aide }: { type: 'GRADE' | 'COTE'; titre: s
           ))}
         </tbody>
       </table>
-      <button type="button" className="bouton-discret mt-2" onClick={() => setLignes([...lignes, { libelle: '', libelleLong: '', min: '' }])}>
-        <Plus className="h-4 w-4" /> Ajouter une mention
-      </button>
+      {modifiable && (
+        <button type="button" className="bouton-discret mt-2" onClick={() => setLignes([...lignes, { libelle: '', libelleLong: '', min: '' }])}>
+          <Plus className="h-4 w-4" /> Ajouter une mention
+        </button>
+      )}
+      </fieldset>
     </Carte>
   );
 }

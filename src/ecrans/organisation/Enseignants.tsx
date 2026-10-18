@@ -6,6 +6,7 @@ import { api } from '../../lib/api';
 import { useApp } from '../../lib/contexte';
 import type { Enseignant } from '../../lib/types';
 import { Carte, Chargement, Champ, Erreur, Etat, Modale, Page, Vide } from '../../components/ui';
+import { type Carriere, carriereDe, ChampsCarriere, corpsCarriere } from '../../components/Carriere';
 
 export default function Enseignants() {
   const { a, annee } = useApp();
@@ -72,7 +73,9 @@ export default function Enseignants() {
                       <div className="font-medium">
                         {p.nom} {p.prenom}
                       </div>
-                      {p.discipline && <div className="text-xs text-encre-2">{p.discipline}</div>}
+                      {(p.discipline || p.grade) && (
+                        <div className="text-xs text-encre-2">{[p.grade, p.discipline].filter(Boolean).join(' · ')}</div>
+                      )}
                     </td>
                     <td className="hidden text-encre-2 md:table-cell">
                       <div className="tabular-nums">{p.telephone ?? ''}</div>
@@ -144,9 +147,11 @@ function FormEnseignant({ enseignant, fermer, rafraichir }: { enseignant: Enseig
     discipline: enseignant?.discipline ?? '',
     actif: enseignant?.actif ?? true,
   });
+  const [carriere, setCarriere] = useState<Carriere>(carriereDe(enseignant));
+  const corps = { ...f, carriere: corpsCarriere(carriere) };
   const envoi = useMutation({
     mutationFn: () =>
-      enseignant ? api(`/utilisateurs/${enseignant.id}`, { methode: 'PUT', corps: f }) : api('/utilisateurs', { methode: 'POST', corps: f }),
+      enseignant ? api(`/utilisateurs/${enseignant.id}`, { methode: 'PUT', corps }) : api('/utilisateurs', { methode: 'POST', corps }),
     onSuccess: () => {
       toast.success(enseignant ? 'Enseignant modifié.' : 'Compte créé. Mot de passe provisoire : « password ».');
       rafraichir();
@@ -191,6 +196,11 @@ function FormEnseignant({ enseignant, fermer, rafraichir }: { enseignant: Enseig
         <Champ libelle="Discipline" className="sm:col-span-2">
           <input className="champ" value={f.discipline} onChange={(e) => setF({ ...f, discipline: e.target.value })} maxLength={80} placeholder="Mathématiques, Électricité…" />
         </Champ>
+        <div className="border-t border-bord pt-3 sm:col-span-2">
+          <div className="mb-2 text-sm font-semibold">Carrière</div>
+          <p className="mb-3 text-xs text-encre-3">Imprimée sur l'attestation de présence effective au poste délivrée par le Proviseur.</p>
+          <ChampsCarriere valeur={carriere} changer={setCarriere} />
+        </div>
         {enseignant && (
           <label className="flex items-center gap-2 text-sm sm:col-span-2">
             <input type="checkbox" className="h-4 w-4" checked={f.actif} onChange={(e) => setF({ ...f, actif: e.target.checked })} />

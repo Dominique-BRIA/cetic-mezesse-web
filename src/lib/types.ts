@@ -12,6 +12,14 @@ export interface Utilisateur {
   actif: boolean;
   doitChangerMotDePasse: boolean;
   discipline: string | null;
+  // Carrière, imprimée sur l'attestation de présence effective au poste
+  sexe?: 'M' | 'F' | null;
+  matricule?: string | null;
+  grade?: string | null;
+  fonction?: string | null;
+  datePriseService?: string | null;
+  dateEntreeFonctionPublique?: string | null;
+  acteNomination?: string | null;
 }
 
 export interface Sequence {
@@ -193,6 +201,38 @@ export interface Etablissement {
   boitePostale: string | null;
   telephone: string | null;
   prefixeMatricule: string;
+  sigleEn: string | null;
+  seuilTableauHonneur: number;
+}
+
+export interface Attestation {
+  id: string;
+  reference: string;
+  numero: number;
+  anneeLibelle: string;
+  utilisateurId: string;
+  beneficiaire: string;
+  sexe: 'M' | 'F' | null;
+  matricule: string;
+  grade: string;
+  fonction: string;
+  datePriseService: string;
+  acteNomination: string | null;
+  signataire: string;
+  delivreeLe: string;
+}
+
+export interface TableauHonneur {
+  seuil: number;
+  periode: CodePeriode;
+  annee: string;
+  total: number;
+  classes: {
+    id: string;
+    nom: string;
+    effectif: number;
+    eleves: { inscriptionId: string; eleveId: string; matricule: string; nom: string; prenoms: string; sexe: 'M' | 'F'; moyenne: number; rang: Rang | null }[];
+  }[];
 }
 
 export interface Bareme {

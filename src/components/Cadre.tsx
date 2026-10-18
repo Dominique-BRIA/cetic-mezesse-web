@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import clsx from 'clsx';
 import {
+  Award,
   BarChart3,
   BookOpen,
   CalendarRange,
@@ -18,6 +19,7 @@ import {
   Moon,
   PenLine,
   Settings,
+  Stamp,
   Sun,
   Trophy,
   UserMinus,
@@ -84,14 +86,16 @@ const SECTIONS: { titre: string | null; liens: Lien[] }[] = [
       { vers: '/bulletins', libelle: 'Bulletins', icone: FileText, roles: [P, SG] },
       { vers: '/statistiques', libelle: 'Statistiques', icone: BarChart3, roles: [P, SG] },
       { vers: '/classement', libelle: 'Classement général', icone: Trophy, roles: [P, SG] },
+      { vers: '/tableau-honneur', libelle: "Tableau d'honneur", icone: Award, roles: [P, SG] },
     ],
   },
   {
     titre: 'Administration',
     liens: [
       { vers: '/decisions', libelle: 'Décisions prises', icone: Gavel, roles: [P] },
+      { vers: '/attestations', libelle: 'Attestations de présence', icone: Stamp, roles: [P] },
       { vers: '/annees', libelle: 'Années et séquences', icone: CalendarRange, roles: [P, SG] },
-      { vers: '/parametres', libelle: 'Paramètres', icone: Settings, roles: [SG] },
+      { vers: '/parametres', libelle: 'Paramètres', icone: Settings, roles: [P, SG] },
     ],
   },
 ];
