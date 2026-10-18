@@ -1,10 +1,16 @@
 import type { CodePeriode, Rang, Role } from './types';
 
+// Au CETIC, le chef d'établissement est le Directeur ou la Directrice (rôle technique : PROVISEUR).
 export const ROLES: Record<Role, string> = {
-  PROVISEUR: 'Proviseur',
+  PROVISEUR: 'Directeur',
   SURVEILLANT_GENERAL: 'Surveillant Général',
   PROFESSEUR: 'Professeur',
 };
+
+/** Libellé du rôle d'une personne, au féminin pour une Directrice. */
+export function libelleRole(u: { role: Role; sexe?: 'M' | 'F' | null }): string {
+  return u.role === 'PROVISEUR' && u.sexe === 'F' ? 'Directrice' : ROLES[u.role];
+}
 
 export function note(v: number | null | undefined, decimales = 2): string {
   if (v === null || v === undefined) return '—';

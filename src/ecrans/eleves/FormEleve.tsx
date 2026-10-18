@@ -6,7 +6,7 @@ import { api } from '../../lib/api';
 import type { Classe, Inscription } from '../../lib/types';
 import { Champ, Erreur, Modale } from '../../components/ui';
 
-// Création (SG, Proviseur) ou modification (SG) d'un élève et de son inscription de l'année.
+// Création (SG, Directeur) ou modification (SG) d'un élève et de son inscription de l'année.
 export function FormEleve({
   ouverte,
   fermer,

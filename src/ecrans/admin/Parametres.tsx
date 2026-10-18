@@ -8,7 +8,7 @@ import { Carte, Chargement, Champ, Erreur, Page } from '../../components/ui';
 import { useApp } from '../../lib/contexte';
 
 export default function Parametres() {
-  // Le SG règle tout ; le Proviseur consulte, et règle le tableau d'honneur.
+  // Le SG règle tout ; le Directeur consulte, et règle le tableau d'honneur.
   const { a } = useApp();
   const sg = a('SURVEILLANT_GENERAL');
   return (

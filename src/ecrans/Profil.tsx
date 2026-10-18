@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { KeyRound, Loader2 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useApp } from '../lib/contexte';
-import { ROLES } from '../lib/format';
+import { libelleRole } from '../lib/format';
 import type { Utilisateur } from '../lib/types';
 import { Carte, Champ, ChampMotDePasse, Erreur, Page } from '../components/ui';
 
@@ -18,6 +18,7 @@ export default function Profil() {
     telephone: u.telephone ?? '',
     email: u.email ?? '',
     discipline: u.discipline ?? '',
+    sexe: u.sexe ?? '',
   });
   const [motDePasse, setMotDePasse] = useState('');
   const [envoi, setEnvoi] = useState(false);
@@ -50,7 +51,7 @@ export default function Profil() {
   }
 
   return (
-    <Page titre="Mon profil" description={`${ROLES[u.role]} · vos informations, visibles par l'administration.`}>
+    <Page titre="Mon profil" description={`${libelleRole(u)} · vos informations, visibles par l'administration.`}>
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <Carte titre="Informations">
           <form onSubmit={enregistrer} className="grid gap-4 sm:grid-cols-2">
@@ -59,6 +60,14 @@ export default function Profil() {
                 <Erreur erreur={erreur} />
               </div>
             ) : null}
+            <Champ libelle="Civilité" aide="Imprimée sur les documents (« La Directrice », « Mme »…).">
+              <select className="champ" value={f.sexe} onChange={(e) => setF({ ...f, sexe: e.target.value })}>
+                <option value="">—</option>
+                <option value="M">M.</option>
+                <option value="F">Mme</option>
+              </select>
+            </Champ>
+            <div className="hidden sm:block" />
             <Champ libelle="Prénom">
               <input className="champ" value={f.prenom} onChange={(e) => setF({ ...f, prenom: e.target.value })} maxLength={80} required />
             </Champ>

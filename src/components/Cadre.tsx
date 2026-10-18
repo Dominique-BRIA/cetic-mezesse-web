@@ -31,7 +31,7 @@ import {
   X,
 } from 'lucide-react';
 import { useApp } from '../lib/contexte';
-import { ROLES } from '../lib/format';
+import { libelleRole } from '../lib/format';
 import type { Role } from '../lib/types';
 import { MotifFond } from './MotifFond';
 import { Marque } from './Marque';
@@ -186,7 +186,7 @@ export function Cadre({ children }: { children: ReactNode }) {
           <div className="truncate text-sm font-semibold">
             {utilisateur.prenom} {utilisateur.nom}
           </div>
-          <div className="text-xs text-encre-2">{ROLES[utilisateur.role]} · Mon profil</div>
+          <div className="text-xs text-encre-2">{libelleRole(utilisateur)} · Mon profil</div>
         </LienNav>
         <div className="mt-2 flex items-center gap-1">
           <button type="button" className="bouton-discret" onClick={basculerTheme} title={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}>

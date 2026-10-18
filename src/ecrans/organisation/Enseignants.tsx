@@ -198,7 +198,7 @@ function FormEnseignant({ enseignant, fermer, rafraichir }: { enseignant: Enseig
         </Champ>
         <div className="border-t border-bord pt-3 sm:col-span-2">
           <div className="mb-2 text-sm font-semibold">Carrière</div>
-          <p className="mb-3 text-xs text-encre-3">Imprimée sur l'attestation de présence effective au poste délivrée par le Proviseur.</p>
+          <p className="mb-3 text-xs text-encre-3">Imprimée sur l'attestation de présence effective au poste délivrée par le Directeur.</p>
           <ChampsCarriere valeur={carriere} changer={setCarriere} />
         </div>
         {enseignant && (

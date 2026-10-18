@@ -14,7 +14,7 @@ export default function Renvoyes() {
   const [choix, setChoix] = useState<Inscription | null>(null);
 
   return (
-    <Page titre="Élèves renvoyés" description={`Élèves retirés de la liste principale en ${annee?.libelle ?? ''}. Seul le Proviseur peut les réintégrer.`}>
+    <Page titre="Élèves renvoyés" description={`Élèves retirés de la liste principale en ${annee?.libelle ?? ''}. Seul le Directeur peut les réintégrer.`}>
       <Carte sansMarge>
         {q.isLoading ? (
           <div className="px-4">

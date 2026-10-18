@@ -10,7 +10,7 @@ import { type Carriere, carriereDe, ChampsCarriere, corpsCarriere, manquants } f
 
 const imprimer = (a: Attestation) => telecharger(`/attestations/${a.id}/pdf`, { ouvrir: true }).catch((e: Error) => toast.error(e.message));
 
-// Attestations de présence effective au poste : le Proviseur les délivre et en garde le registre.
+// Attestations de présence effective au poste : le Directeur les délivre et en garde le registre.
 export default function Attestations() {
   const [nouvelle, setNouvelle] = useState(false);
   const q = useQuery({ queryKey: ['attestations'], queryFn: () => api<Attestation[]>('/attestations', { annee: false }) });
