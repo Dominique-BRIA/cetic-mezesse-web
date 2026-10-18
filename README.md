@@ -4,7 +4,7 @@ Application web de gestion scolaire pour le Proviseur, le Surveillant Général 
 
 Next.js 16 (App Router), React 19, TanStack Query, Tailwind CSS.
 
-L'API est dans le dépôt [cetic-mezesse-backend](https://github.com/Dominique-BRIA/cetic-mezesse-backend) et l'application mobile dans [cetic-mezesse](https://github.com/Dominique-BRIA/cetic-mezesse).
+L'API est dans le dépôt [cetic-mezesse-backend](https://github.com/Dominique-BRIA/cetic-mezesse-backend) et l'application mobile dans [cetic-mezesse-mobile](https://github.com/Dominique-BRIA/cetic-mezesse-mobile).
 
 ## Organisation
 
