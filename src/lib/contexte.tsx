@@ -1,12 +1,18 @@
 // État global : utilisateur connecté, année scolaire consultée, thème.
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, quandSessionExpire, session } from './api';
+import { api, ErreurApi, quandSessionExpire, session } from './api';
 import type { Annee, Role, Utilisateur } from './types';
+
+// Attentes entre les essais d'ouverture de la session : le serveur peut mettre une demi-minute à se réveiller.
+const ATTENTES = [0, 3_000, 8_000, 15_000];
 
 interface Contexte {
   utilisateur: Utilisateur | null;
   chargement: boolean;
+  // Session gardée, mais serveur injoignable après plusieurs essais.
+  injoignable: boolean;
+  reessayer: () => void;
   connecter: (jeton: string, u: Utilisateur, persistant?: boolean) => void;
   deconnecter: () => void;
   rafraichirProfil: () => Promise<void>;
@@ -30,9 +36,13 @@ export function FournisseurApp({ children }: { children: ReactNode }) {
     document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light',
   );
 
+  const [injoignable, setInjoignable] = useState(false);
+  const [essai, setEssai] = useState(0);
+
   const deconnecter = useCallback(() => {
     session.definirJeton(null);
     setUtilisateur(null);
+    setInjoignable(false);
     client.clear();
   }, [client]);
 
@@ -41,12 +51,37 @@ export function FournisseurApp({ children }: { children: ReactNode }) {
       setUtilisateur(null);
       client.clear();
     });
-    if (!session.jeton()) return;
-    api<Utilisateur>('/auth/moi', { annee: false })
-      .then(setUtilisateur)
-      .catch(() => session.definirJeton(null))
-      .finally(() => setChargement(false));
   }, [client]);
+
+  // Reprise de la session gardée. Seul un refus du serveur (401) déconnecte : un serveur qui ne
+  // répond pas (réveil d'Azure, réseau coupé) est réessayé, et la session reste gardée.
+  useEffect(() => {
+    if (!session.jeton()) return;
+    let annule = false;
+    async function ouvrir() {
+      setInjoignable(false);
+      setChargement(true);
+      for (const attente of ATTENTES) {
+        if (attente) await new Promise((r) => setTimeout(r, attente));
+        if (annule || !session.jeton()) return;
+        try {
+          const u = await api<Utilisateur>('/auth/moi', { annee: false });
+          if (!annule) setUtilisateur(u);
+          return;
+        } catch (e) {
+          // Session refusée : api() a effacé le jeton, l'écran de connexion s'affiche.
+          if (e instanceof ErreurApi && e.statut === 401) return;
+        }
+      }
+      if (!annule) setInjoignable(true);
+    }
+    ouvrir().finally(() => {
+      if (!annule) setChargement(false);
+    });
+    return () => {
+      annule = true;
+    };
+  }, [essai]);
 
   const anneesQ = useQuery({
     queryKey: ['annees'],
@@ -64,6 +99,8 @@ export function FournisseurApp({ children }: { children: ReactNode }) {
   const valeur: Contexte = {
     utilisateur,
     chargement,
+    injoignable,
+    reessayer: () => setEssai((n) => n + 1),
     connecter: (jeton, u, persistant = true) => {
       session.definirJeton(jeton, persistant);
       client.clear();

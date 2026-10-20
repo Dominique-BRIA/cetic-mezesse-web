@@ -25,7 +25,7 @@ export function Connexion() {
     try {
       const r = await api<{ jeton: string; utilisateur: Utilisateur }>('/auth/connexion', {
         methode: 'POST',
-        corps: { identifiant, motDePasse },
+        corps: { identifiant, motDePasse, resterConnecte: memoriser },
         annee: false,
       });
       connecter(r.jeton, r.utilisateur, memoriser);

@@ -31,9 +31,33 @@ export function Application({ children }: { children: ReactNode }) {
 
 // Sans session : l'écran de connexion, quelle que soit l'adresse ; mot de passe à changer d'abord si demandé.
 function Portail({ children }: { children: ReactNode }) {
-  const { utilisateur, chargement } = useApp();
+  const { utilisateur, chargement, injoignable } = useApp();
   if (chargement) return <Patienter texte="Ouverture de la session…" />;
+  if (injoignable) return <ServeurInjoignable />;
   if (!utilisateur) return <Connexion />;
   if (utilisateur.doitChangerMotDePasse) return <MotDePasse obligatoire />;
   return <Cadre>{children}</Cadre>;
+}
+
+// Serveur injoignable à l'ouverture : la session reste gardée, on n'affiche pas l'écran de connexion.
+function ServeurInjoignable() {
+  const { reessayer, deconnecter } = useApp();
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-surface px-4">
+      <div className="max-w-sm text-center" role="alert">
+        <p className="text-sm font-semibold text-encre">Le serveur ne répond pas</p>
+        <p className="mt-1 text-sm text-encre-2">
+          Votre session est gardée : inutile de vous reconnecter. Vérifiez la connexion Internet, puis réessayez.
+        </p>
+        <div className="mt-4 flex justify-center gap-2">
+          <button type="button" className="bouton-primaire" onClick={reessayer}>
+            Réessayer
+          </button>
+          <button type="button" className="bouton-discret" onClick={deconnecter}>
+            Se déconnecter
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }

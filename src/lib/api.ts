@@ -47,6 +47,10 @@ export const session = {
       // stockage de session indisponible
     }
   },
+  // Jeton neuf de la même session : gardé au même endroit que l'ancien.
+  renouvelerJeton(j: string) {
+    session.definirJeton(j, lireStockage(CLE_JETON) !== null);
+  },
   annee: () => anneeId,
   definirAnnee(id: string | null) {
     anneeId = id;
@@ -77,6 +81,9 @@ async function traiter(r: Response) {
     session.definirJeton(null);
     surExpiration?.();
   }
+  // Session prolongée (RG-04) : l'API renvoie un jeton neuf dès que l'ancien a plus d'une heure.
+  const neuf = r.headers.get('X-Jeton');
+  if (neuf && jeton && r.status !== 401) session.renouvelerJeton(neuf);
   if (!r.ok) {
     let message = `Erreur ${r.status}`;
     let details: unknown;
