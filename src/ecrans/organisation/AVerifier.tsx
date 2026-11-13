@@ -3,10 +3,10 @@ import Link from 'next/link';
 import clsx from 'clsx';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { AlertTriangle, BookX, Check, ChevronDown, Copy, GitMerge, RotateCcw, UserRoundX } from 'lucide-react';
+import { AlertTriangle, BookX, Check, ChevronDown, Copy, GitMerge, Pencil, RotateCcw, UserRoundX } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useApp } from '../../lib/contexte';
-import { Carte, Chargement, Erreur, Page, Vide } from '../../components/ui';
+import { Carte, Chargement, Erreur, Etat, Page, Vide } from '../../components/ui';
 import { FusionModale, type TypeFusion } from '../../components/Fusion';
 
 interface Point {
@@ -33,46 +33,16 @@ interface Rapport {
 
 type Ton = 'danger' | 'alerte' | 'info';
 
-/** Présentation de chaque catégorie : titre court, couleur selon l'urgence, colonnes du tableau. */
-const CATEGORIES: Record<string, { theme: string; titre: string; aide: string; ton: Ton; colonnes?: [string, string, string?] }> = {
-  'matieres-sans-enseignant': {
-    theme: 'notes',
-    titre: 'Matières sans enseignant',
-    aide: 'Personne ne peut y saisir les notes.',
-    ton: 'danger',
-    colonnes: ['Classe', 'Matière', 'Coefficient et groupe'],
-  },
-  'matieres-enseignant-desactive': {
-    theme: 'notes',
-    titre: 'Matières confiées à un compte désactivé',
-    aide: "L'enseignant ne peut plus se connecter.",
-    ton: 'danger',
-    colonnes: ['Classe', 'Matière', 'Enseignant désactivé'],
-  },
-  'classes-sans-pp': {
-    theme: 'notes',
-    titre: 'Classes sans professeur principal',
-    aide: "Il signe l'appréciation des bulletins.",
-    ton: 'alerte',
-    colonnes: ['Classe', 'Professeur principal'],
-  },
-  'enseignants-doublons': { theme: 'doublons', titre: 'Enseignants en double', aide: 'Même personne enregistrée deux fois ?', ton: 'alerte' },
-  'eleves-doublons': { theme: 'doublons', titre: 'Élèves en double', aide: 'Même élève inscrit deux fois ?', ton: 'alerte' },
-  'matieres-doublons': {
-    theme: 'doublons',
-    titre: 'Matières en double',
-    aide: 'Deux matières presque identiques dans une classe.',
-    ton: 'alerte',
-    colonnes: ['Classe', 'Matières', 'Coefficients'],
-  },
-  'eleves-naissance': {
-    theme: 'fiches',
-    titre: 'Naissances au 1er janvier',
-    aide: 'Souvent une date provisoire.',
-    ton: 'info',
-    colonnes: ['Classe', 'Élève', 'Naissance'],
-  },
-  'eleves-sans-parent': { theme: 'fiches', titre: 'Élèves sans parent à contacter', aide: 'Ni nom ni téléphone de parent.', ton: 'info', colonnes: ['Classe', 'Élève'] },
+/** Rangement de chaque catégorie : section, couleur selon l'urgence, colonnes du tableau. Les textes viennent de l'API. */
+const CATEGORIES: Record<string, { theme: string; ton: Ton; colonnes?: string[] }> = {
+  'matieres-sans-enseignant': { theme: 'notes', ton: 'danger', colonnes: ['Classe', 'Matière', 'Détail'] },
+  'matieres-enseignant-desactive': { theme: 'notes', ton: 'danger', colonnes: ['Classe', 'Matière', 'Détail'] },
+  'classes-sans-pp': { theme: 'notes', ton: 'alerte', colonnes: ['Classe', 'Détail'] },
+  'enseignants-doublons': { theme: 'doublons', ton: 'alerte' },
+  'eleves-doublons': { theme: 'doublons', ton: 'alerte' },
+  'matieres-doublons': { theme: 'doublons', ton: 'alerte', colonnes: ['Classe', 'Matières', 'Détail'] },
+  'eleves-naissance': { theme: 'fiches', ton: 'info', colonnes: ['Classe', 'Élève', 'Détail'] },
+  'eleves-sans-parent': { theme: 'fiches', ton: 'info', colonnes: ['Classe', 'Élève', 'Détail'] },
 };
 
 const THEMES = [
@@ -81,37 +51,19 @@ const THEMES = [
   { code: 'fiches', titre: "Fiches d'élèves", icone: UserRoundX },
 ];
 
-const TONS: Record<Ton, { titre: string; bord: string; pastille: string }> = {
-  danger: { titre: 'text-danger', bord: 'border-l-danger', pastille: 'bg-danger/10 text-danger' },
-  alerte: { titre: 'text-alerte', bord: 'border-l-alerte', pastille: 'bg-alerte/10 text-alerte' },
-  info: { titre: 'text-primaire', bord: 'border-l-primaire', pastille: 'bg-primaire/10 text-primaire' },
+// Bandeau de titre plein, texte blanc (texte foncé en thème sombre, où ces couleurs deviennent claires).
+const TONS: Record<Ton, { bandeau: string; texte: string; teinte: string }> = {
+  danger: { bandeau: 'bg-danger text-white dark:text-[rgb(12_24_38)]', texte: 'text-danger', teinte: 'bg-danger/10 text-danger hover:bg-danger/20' },
+  alerte: { bandeau: 'bg-alerte text-white dark:text-[rgb(12_24_38)]', texte: 'text-alerte', teinte: 'bg-alerte/10 text-alerte hover:bg-alerte/20' },
+  info: { bandeau: 'bg-primaire text-white dark:text-[rgb(12_24_38)]', texte: 'text-primaire', teinte: 'bg-primaire/10 text-primaire hover:bg-primaire/20' },
 };
 
-const presentation = (c: Categorie) => CATEGORIES[c.code] ?? { theme: 'fiches', titre: c.titre, aide: c.explication, ton: 'info' as Ton };
+const rangement = (c: Categorie) => CATEGORIES[c.code] ?? { theme: 'fiches', ton: 'info' as Ton };
 
 /** « Français (4e année Électricité) » → nom et classe. */
 function separer(titre: string): { nom: string; classe: string | null } {
   const m = /^(.*) \(([^()]+)\)$/.exec(titre);
   return m ? { nom: m[1], classe: m[2] } : { nom: titre, classe: null };
-}
-
-/** Le détail renvoyé par l'API, réduit à l'essentiel pour une cellule de tableau. */
-function precision(code: string, detail: string): string {
-  const d = detail.trim().replace(/\.$/, '');
-  switch (code) {
-    case 'matieres-enseignant-desactive':
-      return d.replace(/^Confiée à /, '').replace(/, compte désactivé$/, '');
-    case 'matieres-sans-enseignant':
-      return d.replace(/^Coefficient (\S+), groupe /, 'Coef. $1 · ');
-    case 'classes-sans-pp':
-      return d.replace(/, compte désactivé$/, ' (désactivé)').replace(/^Aucun professeur principal$/, 'Aucun');
-    case 'eleves-naissance':
-      return d.replace(/^Né\(e\) le /, '').replace(/ à /, ' · ');
-    case 'matieres-doublons':
-      return d.split('. ')[0];
-    default:
-      return d;
-  }
 }
 
 const LIGNES_VISIBLES = 5;
@@ -137,52 +89,49 @@ export default function AVerifier() {
   const actifs = (c: Categorie) => c.points.filter((p) => !p.ignore).length;
 
   const actions = (p: Point): ReactNode => (
-    <div className="flex items-center justify-end gap-1">
+    <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+      {p.action.type === 'ouvrir' && p.action.lien && (
+        <Link href={p.action.lien} className="bouton-secondaire" title="Ouvrir la page où corriger">
+          <Pencil className="h-4 w-4" /> Corriger
+        </Link>
+      )}
       {((p.action.type === 'fusionner-enseignants' && sg) || p.action.type === 'fusionner-eleves') && p.action.a && p.action.b && (
         <button
           type="button"
-          className="bouton-secondaire px-2.5 py-1.5"
+          className="bouton-secondaire"
           onClick={() => setFusion({ type: p.action.type === 'fusionner-enseignants' ? 'enseignants' : 'eleves', a: p.action.a!, b: p.action.b! })}
         >
           <GitMerge className="h-4 w-4" /> Fusionner
         </button>
       )}
-      <button
-        type="button"
-        className="bouton-discret py-1.5"
-        disabled={marquer.isPending}
-        onClick={() => marquer.mutate(p)}
-        title={p.ignore ? 'Signaler de nouveau' : "C'est normal : ne plus le signaler"}
-      >
-        {p.ignore ? <RotateCcw className="h-4 w-4" /> : <Check className="h-4 w-4" />}
-        <span className="hidden sm:inline">{p.ignore ? 'Signaler' : 'Normal'}</span>
+      <button type="button" className="bouton-discret" disabled={marquer.isPending} onClick={() => marquer.mutate(p)}>
+        {p.ignore ? (
+          <>
+            <RotateCcw className="h-4 w-4" /> Signaler de nouveau
+          </>
+        ) : (
+          <>
+            <Check className="h-4 w-4" /> C'est normal
+          </>
+        )}
       </button>
     </div>
   );
 
-  const nomLie = (p: Point, nom: string) =>
-    p.action.type === 'ouvrir' && p.action.lien ? (
-      <Link href={p.action.lien} className="lien">
-        {nom}
-      </Link>
-    ) : (
-      <span className="font-medium">{nom}</span>
-    );
-
   // Même ordre que les sections : les urgences d'abord.
-  const rang = (c: Categorie) => THEMES.findIndex((t) => t.code === presentation(c).theme) * 100 + Object.keys(CATEGORIES).indexOf(c.code);
+  const rang = (c: Categorie) => THEMES.findIndex((t) => t.code === rangement(c).theme) * 100 + Object.keys(CATEGORIES).indexOf(c.code);
   const categories = [...(r?.categories ?? [])].sort((x, y) => rang(x) - rang(y));
   const visibles = categories.filter((c) => !filtre || c.code === filtre);
 
   return (
     <Page
       titre="À vérifier"
-      description="Rien n'est bloqué. Corrigez depuis la page concernée, ou cliquez sur « Normal » pour ne plus voir un point."
+      description="Ce qui mérite un coup d'œil, sans rien bloquer. Corrigez depuis la page concernée, ou marquez « C'est normal » pour ne plus le voir."
       actions={
         r && r.ignores > 0 ? (
-          <label className="flex items-center gap-2 text-sm text-encre-2">
+          <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" className="h-4 w-4" checked={avecIgnores} onChange={(e) => setAvecIgnores(e.target.checked)} />
-            Voir les {r.ignores} jugés normaux
+            Afficher les {r.ignores} point(s) jugés normaux
           </label>
         ) : null
       }
@@ -204,29 +153,26 @@ export default function AVerifier() {
               onClick={() => setFiltre(null)}
               className={clsx('rounded-full border px-3 py-1 text-sm font-semibold', !filtre ? 'border-encre bg-encre text-surface' : 'border-bord bg-surface text-encre-2')}
             >
-              Tout · {r.categories.reduce((n, c) => n + actifs(c), 0)}
+              Tout · {categories.reduce((n, c) => n + actifs(c), 0)}
             </button>
             {categories.map((c) => {
-              const pr = presentation(c);
+              const ton = TONS[rangement(c).ton];
               const choisi = filtre === c.code;
               return (
                 <button
                   key={c.code}
                   type="button"
                   onClick={() => setFiltre(choisi ? null : c.code)}
-                  className={clsx(
-                    'rounded-full border px-3 py-1 text-sm font-semibold',
-                    choisi ? clsx('border-current', TONS[pr.ton].pastille) : clsx('border-bord bg-surface', TONS[pr.ton].titre),
-                  )}
+                  className={clsx('rounded-full px-3 py-1 text-sm font-semibold', choisi ? ton.bandeau : ton.teinte)}
                 >
-                  {pr.titre} · {actifs(c)}
+                  {c.titre} · {actifs(c)}
                 </button>
               );
             })}
           </div>
 
           {THEMES.map((t) => {
-            const cats = visibles.filter((c) => presentation(c).theme === t.code);
+            const cats = visibles.filter((c) => rangement(c).theme === t.code);
             if (!cats.length) return null;
             return (
               <section key={t.code} className="space-y-3">
@@ -234,7 +180,7 @@ export default function AVerifier() {
                   <t.icone className="h-4 w-4" /> {t.titre}
                 </h2>
                 {cats.map((c) => (
-                  <BlocCategorie key={c.code} categorie={c} actions={actions} nomLie={nomLie} />
+                  <BlocCategorie key={c.code} categorie={c} actions={actions} />
                 ))}
               </section>
             );
@@ -246,52 +192,53 @@ export default function AVerifier() {
   );
 }
 
-function BlocCategorie({
-  categorie: c,
-  actions,
-  nomLie,
-}: {
-  categorie: Categorie;
-  actions: (p: Point) => ReactNode;
-  nomLie: (p: Point, nom: string) => ReactNode;
-}) {
+function EtatPoint({ p }: { p: Point }) {
+  if (p.ignore) return <Etat ton="neutre">Jugé normal</Etat>;
+  return p.gravite === 'FORTE' ? <Etat ton="alerte">À traiter</Etat> : <Etat ton="neutre">À confirmer</Etat>;
+}
+
+function BlocCategorie({ categorie: c, actions }: { categorie: Categorie; actions: (p: Point) => ReactNode }) {
   const [tout, setTout] = useState(false);
-  const pr = presentation(c);
-  const ton = TONS[pr.ton];
+  const { ton: t, colonnes } = rangement(c);
+  const ton = TONS[t];
   const nombre = c.points.filter((p) => !p.ignore).length;
-  const doublonsDeComptes = c.code === 'enseignants-doublons' || c.code === 'eleves-doublons';
   // Rangés par classe : la classe n'est écrite qu'une fois pour ses lignes.
   const points = [...c.points].sort((x, y) => (separer(x.titre).classe ?? '').localeCompare(separer(y.titre).classe ?? '', 'fr'));
   const montres = tout ? points : points.slice(0, LIGNES_VISIBLES);
+  const reste = points.length - LIGNES_VISIBLES;
 
   return (
-    <section className={clsx('overflow-hidden rounded-lg border border-l-4 border-bord bg-surface', ton.bord)}>
-      <header className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 px-4 py-2.5">
-        <h3 className={clsx('flex items-center gap-2 text-[0.95rem] font-bold', ton.titre)}>
-          {pr.ton === 'danger' && <AlertTriangle className="h-4 w-4 self-center" />}
-          {pr.titre}
-          <span className={clsx('rounded-full px-2 py-0.5 text-xs', ton.pastille)}>{nombre}</span>
+    <section className="overflow-hidden rounded-lg border border-bord bg-surface">
+      <header className={clsx('px-4 py-2.5', ton.bandeau)}>
+        <h3 className="flex items-center gap-2 text-[0.95rem] font-bold">
+          {t === 'danger' && <AlertTriangle className="h-4 w-4" />}
+          {c.titre}
+          <span className="rounded-full bg-white/25 px-2 py-0.5 text-xs dark:bg-black/15">{nombre}</span>
         </h3>
-        <p className="text-sm text-encre-2">{pr.aide}</p>
+        <p className="mt-0.5 text-sm opacity-90">{c.explication}</p>
       </header>
 
-      <div className="overflow-x-auto border-t border-bord">
-        {doublonsDeComptes ? (
+      <div className="overflow-x-auto">
+        {!colonnes ? (
+          // Doublons de comptes : les deux fiches l'une sous l'autre, pour les comparer.
           <ul className="divide-y divide-bord">
             {montres.map((p) => {
               const noms = p.titre.split(' et ');
               const fiches = p.detail.split(' — ');
+              const deux = noms.length === 2 && fiches.length === 2;
               return (
-                <li key={p.cle} className={clsx('flex flex-wrap items-center gap-3 px-4 py-2.5', p.ignore && 'opacity-50')}>
-                  <div className="min-w-0 flex-1 space-y-0.5 text-sm">
-                    {(noms.length === 2 && fiches.length === 2 ? [0, 1] : []).map((i) => (
-                      <div key={i} className="flex flex-wrap items-baseline gap-x-2">
-                        <span className="font-medium">{noms[i]}</span>
-                        <span className="text-xs text-encre-2">{fiches[i].replace(/, /g, ' · ')}</span>
-                        {i === 0 && <span className="text-xs font-semibold text-succes">à garder</span>}
-                      </div>
-                    ))}
-                    {!(noms.length === 2 && fiches.length === 2) && (
+                <li key={p.cle} className={clsx('flex flex-wrap items-center gap-3 px-4 py-3', p.ignore && 'opacity-60')}>
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <EtatPoint p={p} />
+                    {deux ? (
+                      [0, 1].map((i) => (
+                        <div key={i} className="text-sm">
+                          <span className="font-medium">{noms[i]}</span>
+                          {i === 0 && <span className="ml-2 text-xs font-semibold text-succes">compte proposé à garder</span>}
+                          <div className="text-xs text-encre-2">{fiches[i]}</div>
+                        </div>
+                      ))
+                    ) : (
                       <>
                         <div className="font-medium">{p.titre}</div>
                         <div className="text-xs text-encre-2">{p.detail}</div>
@@ -307,8 +254,8 @@ function BlocCategorie({
           <table className="tableau">
             <thead>
               <tr>
-                {(pr.colonnes ?? ['Classe', 'Élément', 'Précision']).filter(Boolean).map((t) => (
-                  <th key={t}>{t}</th>
+                {colonnes.map((titre) => (
+                  <th key={titre}>{titre}</th>
                 ))}
                 <th className="w-px" />
               </tr>
@@ -316,14 +263,29 @@ function BlocCategorie({
             <tbody>
               {montres.map((p, i) => {
                 const { nom, classe } = separer(p.titre);
-                const sansClasse = c.code === 'classes-sans-pp';
+                const sansClasse = colonnes.length === 2;
                 const memeClasse = i > 0 && separer(montres[i - 1].titre).classe === classe;
-                const prec = precision(c.code, p.detail);
                 return (
-                  <tr key={p.cle} className={clsx(p.ignore && 'opacity-50')}>
-                    <td className="whitespace-nowrap font-semibold text-encre">{sansClasse ? nomLie(p, nom) : memeClasse ? '' : classe}</td>
-                    {!sansClasse && <td>{nomLie(p, nom)}</td>}
-                    {(pr.colonnes?.length ?? 3) > 2 || sansClasse ? <td className="text-encre-2">{prec}</td> : null}
+                  <tr key={p.cle} className={clsx(p.ignore && 'opacity-60')}>
+                    <td className="whitespace-nowrap align-top font-semibold text-encre">
+                      {sansClasse ? (
+                        <div className="space-y-0.5">
+                          <div>{nom}</div>
+                          <EtatPoint p={p} />
+                        </div>
+                      ) : memeClasse ? (
+                        ''
+                      ) : (
+                        classe
+                      )}
+                    </td>
+                    {!sansClasse && (
+                      <td className="align-top">
+                        <div className="font-medium">{nom}</div>
+                        <EtatPoint p={p} />
+                      </td>
+                    )}
+                    <td className="align-top text-encre-2">{p.detail}</td>
                     <td>{actions(p)}</td>
                   </tr>
                 );
@@ -331,14 +293,14 @@ function BlocCategorie({
             </tbody>
           </table>
         )}
-        {points.length > LIGNES_VISIBLES && (
+        {reste > 0 && (
           <button
             type="button"
-            className={clsx('flex w-full items-center justify-center gap-2 border-t border-bord py-2 text-sm font-semibold transition-opacity hover:opacity-80', ton.pastille)}
+            className={clsx('flex w-full items-center justify-center gap-2 border-t border-bord py-2.5 text-sm font-semibold transition-colors', ton.teinte)}
             onClick={() => setTout(!tout)}
           >
             <ChevronDown className={clsx('h-4 w-4 transition-transform', tout && 'rotate-180')} />
-            {tout ? 'Voir moins' : `Voir plus · ${points.length - LIGNES_VISIBLES} autre${points.length - LIGNES_VISIBLES > 1 ? 's' : ''}`}
+            {tout ? 'Voir moins' : `Voir plus · ${reste} autre${reste > 1 ? 's' : ''}`}
           </button>
         )}
       </div>
