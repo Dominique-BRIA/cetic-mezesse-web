@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { FileSpreadsheet, FileText, Loader2, Pencil, Plus, Tags, Trash2 } from 'lucide-react';
 import { api, telecharger } from '../../lib/api';
+import { useCleEnvoi } from '../../lib/doublons';
 import { requetes } from '../../lib/requetes';
 import { useApp } from '../../lib/contexte';
 import { nomClasse } from '../../lib/format';
@@ -134,12 +135,16 @@ function FormClasse({ classe, classes, fermer }: { classe: Classe | null; classe
     client.invalidateQueries({ queryKey: ['classes'] });
     client.invalidateQueries({ queryKey: ['specialites'] });
   };
+  const cle = useCleEnvoi();
   const envoi = useMutation({
     mutationFn: () => {
       const corps = { ...f, specialiteId: f.specialiteId || null, profPrincipalId: f.profPrincipalId || null };
-      return classe ? api(`/classes/${classe.id}`, { methode: 'PUT', corps }) : api('/classes', { methode: 'POST', corps });
+      // Le formulaire montre déjà les classes renommées : pas de seconde question, seulement l'envoi unique.
+      const entetes = { 'X-Envoi': cle.cle() };
+      return classe ? api(`/classes/${classe.id}`, { methode: 'PUT', corps, entetes }) : api('/classes', { methode: 'POST', corps, entetes });
     },
     onSuccess: () => {
+      cle.renouveler();
       toast.success(classe ? 'Classe modifiée.' : 'Classe créée.');
       invalider();
       fermer();

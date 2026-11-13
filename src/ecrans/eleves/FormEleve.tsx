@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { api } from '../../lib/api';
+import { envoyer, useCleEnvoi } from '../../lib/doublons';
 import type { Classe, Inscription } from '../../lib/types';
 import { Champ, Erreur, Modale } from '../../components/ui';
 
@@ -37,12 +38,18 @@ export function FormEleve({
   });
   const maj = (cle: keyof typeof f) => (ev: { target: { value: string } }) => setF({ ...f, [cle]: ev.target.value });
 
+  const cle = useCleEnvoi();
   const envoi = useMutation({
     mutationFn: () =>
-      e
-        ? api(`/eleves/${e.id}`, { methode: 'PUT', corps: f })
-        : api<{ matricule: string }>('/eleves', { methode: 'POST', corps: f }),
+      envoyer(
+        (entetes) =>
+          e
+            ? api(`/eleves/${e.id}`, { methode: 'PUT', corps: f, entetes })
+            : api<{ matricule: string }>('/eleves', { methode: 'POST', corps: f, entetes }),
+        cle.cle(),
+      ),
     onSuccess: (r) => {
+      cle.renouveler();
       toast.success(e ? 'Élève modifié.' : `Élève créé, matricule ${(r as { matricule: string }).matricule}.`);
       client.invalidateQueries({ queryKey: ['eleves'] });
       client.invalidateQueries({ queryKey: ['eleve'] });

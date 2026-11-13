@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import clsx from 'clsx';
 import { useIsFetching, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, Eye, EyeOff, Loader2, RefreshCw, X } from 'lucide-react';
-import { ErreurApi } from '../lib/api';
+import { Abandon, ErreurApi } from '../lib/api';
 import { PERIODES } from '../lib/format';
 import type { CodePeriode } from '../lib/types';
 
@@ -129,6 +129,7 @@ export function Patienter({ texte }: { texte: string }) {
 }
 
 export function Erreur({ erreur }: { erreur: unknown }) {
+  if (erreur instanceof Abandon) return null;
   const message = erreur instanceof ErreurApi || erreur instanceof Error ? erreur.message : 'Une erreur est survenue.';
   return (
     <div className="flex items-start gap-2 rounded border border-danger/30 bg-danger/5 px-3 py-2.5 text-sm text-danger">

@@ -158,6 +158,8 @@ export interface Inscription {
 
 export interface Enseignant extends Utilisateur {
   creeLe: string;
+  /** Compte absorbé par une fusion de doublons : l'id du compte gardé. */
+  fusionneDansId?: string | null;
   matieres: { id: string; nom: string; coefficient: number; classe: { id: string; nom: string } }[];
   classesPrincipales: { id: string; nom: string }[];
 }

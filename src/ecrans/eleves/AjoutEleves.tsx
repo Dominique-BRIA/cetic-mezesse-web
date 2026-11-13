@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import clsx from 'clsx';
 import { Camera, Loader2, Plus, Trash2 } from 'lucide-react';
 import { api, ErreurApi } from '../../lib/api';
+import { envoyer, useCleEnvoi } from '../../lib/doublons';
 import { reduirePhoto } from '../../lib/photo';
 import type { Classe } from '../../lib/types';
 import { Champ, Erreur, Modale } from '../../components/ui';
@@ -74,6 +75,7 @@ export function AjoutEleves({ classes, classeParDefaut, fermer }: { classes: Cla
     }
   };
 
+  const cle = useCleEnvoi();
   const envoi = useMutation({
     mutationFn: () => {
       const donnees = {
@@ -86,13 +88,16 @@ export function AjoutEleves({ classes, classeParDefaut, fermer }: { classes: Cla
         })),
       };
       // Avec des photos : formulaire multipart, photo de la ligne n sous « photo_n ».
-      if (!remplies.some((l) => l.photo)) return api<{ message: string; nombre: number }>('/eleves/lot', { methode: 'POST', corps: donnees });
+      if (!remplies.some((l) => l.photo)) {
+        return envoyer((entetes) => api<{ message: string; nombre: number }>('/eleves/lot', { methode: 'POST', corps: donnees, entetes }), cle.cle());
+      }
       const formulaire = new FormData();
       formulaire.append('donnees', JSON.stringify(donnees));
       remplies.forEach((l, i) => l.photo && formulaire.append(`photo_${i}`, l.photo, `photo-${i}.jpg`));
-      return api<{ message: string; nombre: number }>('/eleves/lot', { methode: 'POST', corps: formulaire });
+      return envoyer((entetes) => api<{ message: string; nombre: number }>('/eleves/lot', { methode: 'POST', corps: formulaire, entetes }), cle.cle());
     },
     onSuccess: (r) => {
+      cle.renouveler();
       toast.success(r.message);
       client.invalidateQueries({ queryKey: ['eleves'] });
       client.invalidateQueries({ queryKey: ['classes'] });

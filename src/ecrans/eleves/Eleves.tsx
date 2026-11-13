@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Camera, Download, FileSpreadsheet, FileText, Loader2, Plus, Search, Upload } from 'lucide-react';
 import { api, telecharger } from '../../lib/api';
+import { envoyer, useCleEnvoi } from '../../lib/doublons';
 import { requetes } from '../../lib/requetes';
 import { useApp } from '../../lib/contexte';
 import { date } from '../../lib/format';
@@ -143,12 +144,13 @@ function ImportEleves({ fermer, classes, classeParDefaut }: { fermer: () => void
   const client = useQueryClient();
   const [classeId, setClasseId] = useState(classeParDefaut || classes[0]?.id || '');
   const [fichier, setFichier] = useState<File | null>(null);
+  const cle = useCleEnvoi();
   const envoi = useMutation({
     mutationFn: () => {
       const fd = new FormData();
       fd.append('classeId', classeId);
       fd.append('fichier', fichier!);
-      return api<{ message: string }>('/eleves/import', { methode: 'POST', corps: fd });
+      return envoyer((entetes) => api<{ message: string }>('/eleves/import', { methode: 'POST', corps: fd, entetes }), cle.cle());
     },
     onSuccess: (r) => {
       toast.success(r.message);

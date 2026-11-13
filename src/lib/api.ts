@@ -58,6 +58,13 @@ export const session = {
   },
 };
 
+/** L'utilisateur a renoncé à enregistrer après un avertissement (doublon probable) : rien à afficher. */
+export class Abandon extends Error {
+  constructor() {
+    super('Enregistrement abandonné.');
+  }
+}
+
 export class ErreurApi extends Error {
   // details : le corps JSON de la réponse (par exemple les erreurs ligne par ligne d'une saisie groupée).
   constructor(public statut: number, message: string, public details?: unknown) {
@@ -98,7 +105,10 @@ async function traiter(r: Response) {
   }
 }
 
-export async function api<T = unknown>(chemin: string, options: { methode?: string; corps?: unknown; annee?: boolean } = {}): Promise<T> {
+export async function api<T = unknown>(
+  chemin: string,
+  options: { methode?: string; corps?: unknown; annee?: boolean; entetes?: Record<string, string> } = {},
+): Promise<T> {
   let r: Response;
   try {
     r = await fetch(url(chemin, options.annee !== false), {
@@ -106,6 +116,7 @@ export async function api<T = unknown>(chemin: string, options: { methode?: stri
       headers: {
         ...(options.corps !== undefined && !(options.corps instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
         ...(jeton ? { Authorization: `Bearer ${jeton}` } : {}),
+        ...options.entetes,
       },
       body:
         options.corps === undefined

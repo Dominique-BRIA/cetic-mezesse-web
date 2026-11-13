@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { KeyRound, Loader2, Pencil, Plus, Search } from 'lucide-react';
+import { GitMerge, KeyRound, Loader2, Pencil, Plus, Search } from 'lucide-react';
 import { api } from '../../lib/api';
+import { envoyer, estAbandon, useCleEnvoi } from '../../lib/doublons';
+import { ChoixAutreEnseignant, FusionModale } from '../../components/Fusion';
 import { requetes } from '../../lib/requetes';
 import { useApp } from '../../lib/contexte';
 import type { Enseignant } from '../../lib/types';
@@ -15,12 +17,14 @@ export default function Enseignants() {
   const q = useQuery(requetes.enseignants(annee?.id));
   const [edition, setEdition] = useState<Enseignant | 'nouveau' | null>(null);
   const [filtre, setFiltre] = useState('');
+  const [fusion, setFusion] = useState<{ moi: Enseignant; autre?: string } | null>(null);
   const sg = a('SURVEILLANT_GENERAL');
 
   const reinitialiser = useMutation({
-    mutationFn: (p: Enseignant) => api<{ message: string }>(`/utilisateurs/${p.id}/reinitialiser`, { methode: 'POST' }),
+    mutationFn: (p: Enseignant) =>
+      envoyer((entetes) => api<{ message: string }>(`/utilisateurs/${p.id}/reinitialiser`, { methode: 'POST', entetes })),
     onSuccess: (r) => toast.success(r.message),
-    onError: (e) => toast.error(e.message),
+    onError: (e) => !estAbandon(e) && toast.error(e.message),
   });
 
   const liste = (q.data ?? []).filter((p) =>
@@ -95,7 +99,9 @@ export default function Enseignants() {
                     </td>
                     <td className="hidden lg:table-cell">{p.classesPrincipales.map((c) => c.nom).join(', ') || '—'}</td>
                     <td>
-                      {!p.actif ? (
+                      {p.fusionneDansId ? (
+                        <Etat ton="neutre">Fusionné</Etat>
+                      ) : !p.actif ? (
                         <Etat ton="neutre">Désactivé</Etat>
                       ) : p.doitChangerMotDePasse ? (
                         <Etat ton="alerte">Mot de passe provisoire</Etat>
@@ -103,8 +109,12 @@ export default function Enseignants() {
                         <Etat ton="succes">Actif</Etat>
                       )}
                     </td>
-                    {sg && (
+                    {sg && p.fusionneDansId && <td />}
+                    {sg && !p.fusionneDansId && (
                       <td className="whitespace-nowrap text-right">
+                        <button type="button" className="bouton-discret" onClick={() => setFusion({ moi: p })} title="Fusionner avec un autre compte de la même personne">
+                          <GitMerge className="h-4 w-4" />
+                        </button>
                         <button type="button" className="bouton-discret" onClick={() => setEdition(p)} aria-label="Modifier">
                           <Pencil className="h-4 w-4" />
                         </button>
@@ -135,6 +145,10 @@ export default function Enseignants() {
           rafraichir={() => client.invalidateQueries({ queryKey: ['enseignants'] })}
         />
       )}
+      {fusion && !fusion.autre && (
+        <ChoixAutreEnseignant moi={fusion.moi} comptes={q.data ?? []} choisir={(id) => setFusion({ ...fusion, autre: id })} fermer={() => setFusion(null)} />
+      )}
+      {fusion?.autre && <FusionModale type="enseignants" a={fusion.moi.id} b={fusion.autre} fermer={() => setFusion(null)} />}
     </Page>
   );
 }
@@ -150,10 +164,18 @@ function FormEnseignant({ enseignant, fermer, rafraichir }: { enseignant: Enseig
   });
   const [carriere, setCarriere] = useState<Carriere>(carriereDe(enseignant));
   const corps = { ...f, carriere: corpsCarriere(carriere) };
+  const cle = useCleEnvoi();
   const envoi = useMutation({
     mutationFn: () =>
-      enseignant ? api(`/utilisateurs/${enseignant.id}`, { methode: 'PUT', corps }) : api('/utilisateurs', { methode: 'POST', corps }),
+      envoyer(
+        (entetes) =>
+          enseignant
+            ? api(`/utilisateurs/${enseignant.id}`, { methode: 'PUT', corps, entetes })
+            : api('/utilisateurs', { methode: 'POST', corps, entetes }),
+        cle.cle(),
+      ),
     onSuccess: () => {
+      cle.renouveler();
       toast.success(enseignant ? 'Enseignant modifié.' : 'Compte créé. Mot de passe provisoire : « password ».');
       rafraichir();
       fermer();

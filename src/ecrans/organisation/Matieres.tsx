@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
 import { api, ErreurApi } from '../../lib/api';
+import { envoyer, useCleEnvoi } from '../../lib/doublons';
 import { requetes } from '../../lib/requetes';
 import { useApp } from '../../lib/contexte';
 import type { Enseignant, Groupe, Matiere } from '../../lib/types';
@@ -172,12 +173,17 @@ function FormMatiere({ matiere, classeId, suivant, fermer }: { matiere: Matiere 
     professeurId: matiere?.professeurId ?? '',
   });
   const groupeId = f.groupeId || groupesClasse[0]?.id || '';
+  const cle = useCleEnvoi();
   const envoi = useMutation({
     mutationFn: () => {
       const corps = { ...f, groupeId, classeId, professeurId: f.professeurId || null };
-      return matiere ? api(`/matieres/${matiere.id}`, { methode: 'PUT', corps }) : api('/matieres', { methode: 'POST', corps });
+      return envoyer(
+        (entetes) => (matiere ? api(`/matieres/${matiere.id}`, { methode: 'PUT', corps, entetes }) : api('/matieres', { methode: 'POST', corps, entetes })),
+        cle.cle(),
+      );
     },
     onSuccess: () => {
+      cle.renouveler();
       toast.success(matiere ? 'Matière modifiée.' : 'Matière créée.');
       client.invalidateQueries({ queryKey: ['matieres'] });
       client.invalidateQueries({ queryKey: ['classes'] });

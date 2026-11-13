@@ -2,6 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ErreurApi, quandSessionExpire, session } from './api';
+import { desabonner } from './push';
 import type { Annee, Role, Utilisateur } from './types';
 
 // Attentes entre les essais d'ouverture de la session : le serveur peut mettre une demi-minute à se réveiller.
@@ -40,6 +41,8 @@ export function FournisseurApp({ children }: { children: ReactNode }) {
   const [essai, setEssai] = useState(0);
 
   const deconnecter = useCallback(() => {
+    // Avant d'effacer la session : ce navigateur ne recevra plus les notifications push du compte.
+    desabonner();
     session.definirJeton(null);
     setUtilisateur(null);
     setInjoignable(false);

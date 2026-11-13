@@ -3,13 +3,14 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ArrowLeft, Camera, FileText, IdCard, Loader2, Pencil, UserMinus, UserPlus } from 'lucide-react';
+import { ArrowLeft, Camera, FileText, GitMerge, IdCard, Loader2, Pencil, UserMinus, UserPlus } from 'lucide-react';
 import { api, telecharger, urlProtegee } from '../../lib/api';
 import { useApp } from '../../lib/contexte';
 import { date, PERIODES } from '../../lib/format';
 import type { Classe, CodePeriode, Eleve, Inscription } from '../../lib/types';
 import { Carte, Chargement, Champ, Erreur, Etat, Modale, Page } from '../../components/ui';
 import { FormEleve } from './FormEleve';
+import { ChoixAutreEleve, FusionModale } from '../../components/Fusion';
 
 type FicheData = Eleve & { inscriptions: Omit<Inscription, 'eleve'>[] };
 
@@ -22,6 +23,7 @@ export default function FicheEleve() {
   const [edition, setEdition] = useState(false);
   const [renvoi, setRenvoi] = useState(false);
   const [reintegration, setReintegration] = useState(false);
+  const [fusion, setFusion] = useState<{ autre?: string } | null>(null);
   const [periode, setPeriode] = useState<CodePeriode>('S1');
   const fichierPhoto = useRef<HTMLInputElement>(null);
 
@@ -56,6 +58,11 @@ export default function FicheEleve() {
           {a('SURVEILLANT_GENERAL') && actuelle && (
             <button type="button" className="bouton-secondaire" onClick={() => setEdition(true)}>
               <Pencil className="h-4 w-4" /> Modifier
+            </button>
+          )}
+          {(a('SURVEILLANT_GENERAL') || a('PROVISEUR')) && (
+            <button type="button" className="bouton-secondaire" onClick={() => setFusion({})} title="Cet élève a une seconde fiche : les réunir">
+              <GitMerge className="h-4 w-4" /> Fusionner…
             </button>
           )}
           {a('PROVISEUR') && actuelle?.statut === 'ACTIF' && (
@@ -210,6 +217,10 @@ export default function FicheEleve() {
       {edition && actuelle && classes.data && (
         <FormEleve ouverte fermer={() => setEdition(false)} classes={classes.data} inscription={{ ...actuelle, eleve: e } as Inscription} />
       )}
+      {fusion && !fusion.autre && (
+        <ChoixAutreEleve moi={e.id} libelle={`${e.nom} ${e.prenoms}`} choisir={(autre) => setFusion({ autre })} fermer={() => setFusion(null)} />
+      )}
+      {fusion?.autre && <FusionModale type="eleves" a={e.id} b={fusion.autre} fermer={() => setFusion(null)} />}
       {renvoi && actuelle && <Renvoi inscriptionId={actuelle.id} nom={`${e.nom} ${e.prenoms}`} fermer={() => setRenvoi(false)} />}
       {reintegration && actuelle && (
         <Reintegration inscriptionId={actuelle.id} nom={`${e.nom} ${e.prenoms}`} fermer={() => setReintegration(false)} />

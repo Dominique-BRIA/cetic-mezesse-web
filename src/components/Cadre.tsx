@@ -11,6 +11,7 @@ import {
   ClipboardList,
   FileText,
   Gavel,
+  ClipboardCheck,
   KeyRound,
   Layers,
   LayoutDashboard,
@@ -40,6 +41,7 @@ import type { Role } from '../lib/types';
 import { MotifFond } from './MotifFond';
 import { Marque } from './Marque';
 import { Cloche } from './Notifications';
+import { ProposerNotifications } from './Push';
 
 interface Lien {
   vers: string;
@@ -96,6 +98,7 @@ const SECTIONS: { titre: string | null; liens: Lien[] }[] = [
   {
     titre: 'Administration',
     liens: [
+      { vers: '/a-verifier', libelle: 'À vérifier', icone: ClipboardCheck, roles: [P, SG] },
       { vers: '/decisions', libelle: 'Décisions prises', icone: Gavel, roles: [P] },
       { vers: '/attestations', libelle: 'Attestations de présence', icone: Stamp, roles: [P] },
       { vers: '/annees', libelle: 'Années et séquences', icone: CalendarRange, roles: [P, SG] },
@@ -275,6 +278,7 @@ export function Cadre({ children }: { children: ReactNode }) {
           </div>
         </main>
       </div>
+      <ProposerNotifications />
     </div>
   );
 }
