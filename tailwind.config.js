@@ -11,6 +11,7 @@ export default {
         surface: v('surface'),
         'surface-2': v('surface-2'),
         bord: v('bord'),
+        'bord-champ': v('bord-champ'),
         encre: v('encre'),
         'encre-2': v('encre-2'),
         'encre-3': v('encre-3'),

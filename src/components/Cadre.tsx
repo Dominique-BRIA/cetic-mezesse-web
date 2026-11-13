@@ -11,6 +11,8 @@ import {
   ClipboardList,
   FileText,
   Gavel,
+  CalendarCheck,
+  CalendarClock,
   ClipboardCheck,
   KeyRound,
   Layers,
@@ -22,11 +24,15 @@ import {
   Moon,
   PenLine,
   Settings,
+  ShieldCheck,
+  Sigma,
   Stamp,
   Sun,
   Trophy,
   UserMinus,
   UserPlus,
+  UserX,
+  UserRoundX,
   Users,
   GraduationCap,
   IdCard,
@@ -77,11 +83,22 @@ const SECTIONS: { titre: string | null; liens: Lien[] }[] = [
     ],
   },
   {
+    titre: 'Absences',
+    liens: [
+      { vers: '/appel', libelle: "Feuille d'appel", icone: CalendarCheck, roles: [P, SG] },
+      { vers: '/absences', libelle: 'Absences', icone: UserX, roles: [P, SG] },
+      { vers: '/justifications', libelle: 'Justifications', icone: ShieldCheck, roles: [P, SG] },
+      { vers: '/absences/bilan', libelle: 'Bilan des absences', icone: Sigma, roles: [P, SG] },
+      { vers: '/absences/enseignants', libelle: 'Enseignants absents', icone: UserRoundX, roles: [P, SG] },
+    ],
+  },
+  {
     titre: 'Organisation',
     liens: [
       { vers: '/classes', libelle: 'Classes', icone: School, roles: [P, SG] },
       { vers: '/groupes', libelle: 'Groupes de matières', icone: Layers, roles: [P, SG] },
       { vers: '/matieres', libelle: 'Matières', icone: BookOpen, roles: [P, SG] },
+      { vers: '/emploi-du-temps', libelle: 'Emploi du temps', icone: CalendarClock, roles: [P, SG] },
       { vers: '/enseignants', libelle: 'Enseignants', icone: GraduationCap, roles: [P, SG] },
     ],
   },
@@ -124,7 +141,10 @@ function LienNav({
   const chemin = usePathname();
   const client = useQueryClient();
   const { annee } = useApp();
-  const actif = vers === '/' ? chemin === '/' : chemin === vers || chemin.startsWith(`${vers}/`);
+  // Une page sous une autre (« /absences/bilan ») n'allume que son propre lien.
+  const couvre = (v: string) => v !== '/' && (chemin === v || chemin.startsWith(`${v}/`));
+  const plusPrecis = SECTIONS.some((s) => s.liens.some((l) => l.vers.length > vers.length && !l.vers.includes('?') && couvre(l.vers)));
+  const actif = vers === '/' ? chemin === '/' : couvre(vers) && !plusPrecis;
   // Les données de la page sont demandées dès le survol (ou le toucher), avant même le clic.
   const prechargerPage = () => precharger(client, vers, annee?.id);
   return (

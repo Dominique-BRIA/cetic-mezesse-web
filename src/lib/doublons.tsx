@@ -11,10 +11,10 @@ import { Etat, Modale } from '../components/ui';
 
 export interface Candidat {
   id: string | null;
-  type: 'enseignant' | 'eleve' | 'matiere' | 'classe' | 'ligne';
+  type: 'enseignant' | 'eleve' | 'matiere' | 'classe' | 'ligne' | 'creneau';
   libelle: string;
   detail: string | null;
-  force: 'FORTE' | 'FAIBLE';
+  force: 'FORTE' | 'FAIBLE' | 'HORAIRE';
   lien: string | null;
   creeLe: string | null;
   ligne: number | null;
@@ -71,6 +71,7 @@ const OBJETS: Record<Candidat['type'], string> = {
   matiere: "S'il s'agit de la même matière, modifiez celle qui existe.",
   classe: "Une classe de plus au même niveau et dans la même spécialité renommera les classes en A, B…",
   ligne: 'Deux lignes de cet envoi se ressemblent.',
+  creneau: "Une classe ne suit qu'un cours à la fois et un enseignant ne peut pas être dans deux classes en même temps. Enregistrez quand même si c'est voulu (classe partagée en groupes, cours commun).",
 };
 
 function depuis(iso: string | null) {
@@ -133,7 +134,13 @@ export function ConfirmationDoublons() {
                 <div className="flex flex-wrap items-center gap-2">
                   {c.ligne != null && <span className="text-xs font-semibold text-encre-2">Ligne {c.ligne}</span>}
                   <span className="font-medium">{c.libelle}</span>
-                  {c.force === 'FORTE' ? <Etat ton="alerte">Très probablement la même</Etat> : <Etat ton="neutre">Nom proche</Etat>}
+                  {c.force === 'HORAIRE' ? (
+                    <Etat ton="alerte">Même heure</Etat>
+                  ) : c.force === 'FORTE' ? (
+                    <Etat ton="alerte">Très probablement la même</Etat>
+                  ) : (
+                    <Etat ton="neutre">Nom proche</Etat>
+                  )}
                 </div>
                 {(c.detail || c.creeLe) && (
                   <div className="mt-0.5 text-xs text-encre-2">{[c.detail, depuis(c.creeLe)].filter(Boolean).join(' · ')}</div>

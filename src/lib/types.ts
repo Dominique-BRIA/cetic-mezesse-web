@@ -207,6 +207,17 @@ export interface Etablissement {
   seuilTableauHonneur: number;
 }
 
+/** Ligne du bloc « Discipline » du bulletin qui porte une sanction. */
+export type LigneBulletin = 'AUCUNE' | 'AVERTISSEMENT' | 'BLAME' | 'EXCLUSION';
+
+/** Sanction pour absences non justifiées, réglée par le SG : à partir de `minutes` cumulées depuis la rentrée. */
+export interface SanctionAbsence {
+  id?: string;
+  libelle: string;
+  ligne: LigneBulletin;
+  minutes: number;
+}
+
 export interface Attestation {
   id: string;
   reference: string;

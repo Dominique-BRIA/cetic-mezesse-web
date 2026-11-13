@@ -64,3 +64,11 @@ export function nomClasse(niveau: number, specialite: string | null | undefined,
   const lettre = nombre > 1 ? ` ${rang < 26 ? String.fromCharCode(65 + rang) : rang + 1}` : '';
   return `${niveau === 1 ? '1re' : `${niveau}e`} année${specialite ? ` ${specialite}` : ''}${lettre}`;
 }
+
+/** Durée en minutes affichée en heures et minutes : « 55 min », « 1 h », « 3 h 25 ». */
+export function duree(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h === 0) return `${m} min`;
+  return m === 0 ? `${h} h` : `${h} h ${String(m).padStart(2, '0')}`;
+}
