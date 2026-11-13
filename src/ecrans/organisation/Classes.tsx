@@ -11,6 +11,18 @@ import { nomClasse } from '../../lib/format';
 import type { Classe, Enseignant, Specialite } from '../../lib/types';
 import { Carte, Chargement, Champ, Erreur, Modale, Page, Vide } from '../../components/ui';
 
+const libelleNiveau = (n: number) => `${n === 1 ? '1re' : `${n}e`} année`;
+const eleves = (classes: Classe[]) => classes.reduce((n, c) => n + c._count.inscriptions, 0);
+
+/** Les classes groupées par niveau (1re année d'abord), par ordre de nom à l'intérieur d'un niveau. */
+function parNiveau(classes: Classe[]): [number, Classe[]][] {
+  const groupes = new Map<number, Classe[]>();
+  for (const c of [...classes].sort((x, y) => x.niveau - y.niveau || x.nom.localeCompare(y.nom, 'fr'))) {
+    groupes.set(c.niveau, [...(groupes.get(c.niveau) ?? []), c]);
+  }
+  return [...groupes.entries()];
+}
+
 export default function Classes() {
   const { a, annee } = useApp();
   const q = useQuery(requetes.classes(annee?.id));
@@ -43,60 +55,73 @@ export default function Classes() {
           <Vide titre="Aucune classe">Créez d'abord les spécialités, puis les classes de l'année et leurs groupes de matières.</Vide>
         </Carte>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {q.data.map((c) => (
-            <Carte
-              key={c.id}
-              titre={c.nom}
-              actions={
-                sg && (
-                  <button type="button" className="bouton-discret" onClick={() => setEdition(c)} aria-label={`Modifier ${c.nom}`}>
-                    <Pencil className="h-4 w-4" />
-                  </button>
-                )
-              }
-            >
-              <dl className="space-y-1.5 text-sm">
-                <div className="flex justify-between gap-3">
-                  <dt className="text-encre-2">Spécialité</dt>
-                  <dd className="text-right">{c.specialite?.nom ?? '—'}</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-encre-2">Élèves</dt>
-                  <dd className="font-semibold tabular-nums">{c._count.inscriptions}</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-encre-2">Matières</dt>
-                  <dd className="font-semibold tabular-nums">{c._count.matieres}</dd>
-                </div>
-                <div className="flex justify-between gap-3">
-                  <dt className="text-encre-2">Prof. principal</dt>
-                  <dd className="text-right">{c.profPrincipal ? `${c.profPrincipal.prenom} ${c.profPrincipal.nom}` : '—'}</dd>
-                </div>
-              </dl>
-              <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 border-t border-bord pt-3 text-sm">
-                <Link className="lien" href={`/eleves?classe=${c.id}`}>
-                  Élèves
-                </Link>
-                <Link className="lien" href={`/matieres?classe=${c.id}`}>
-                  Matières
-                </Link>
-                <button
-                  type="button"
-                  className="lien inline-flex items-center gap-1"
-                  onClick={() => telecharger(`/documents/liste?classeId=${c.id}&format=pdf`, { ouvrir: true }).catch((e) => toast.error(e.message))}
-                >
-                  <FileText className="h-3.5 w-3.5" /> Liste PDF
-                </button>
-                <button
-                  type="button"
-                  className="lien inline-flex items-center gap-1"
-                  onClick={() => telecharger(`/documents/liste?classeId=${c.id}&format=xlsx`).catch((e) => toast.error(e.message))}
-                >
-                  <FileSpreadsheet className="h-3.5 w-3.5" /> Excel
-                </button>
+        // Rangées par niveau : un titre par niveau, puis ses classes.
+        <div className="space-y-6">
+          {parNiveau(q.data).map(([niveau, classes]) => (
+            <section key={niveau} className="overflow-hidden rounded-lg border border-primaire/30 bg-primaire-pale/50">
+              <h2 className="flex flex-wrap items-baseline gap-x-3 bg-primaire px-4 py-2.5 text-white dark:text-[rgb(12_24_38)]">
+                <span className="text-base font-bold">{libelleNiveau(niveau)}</span>
+                <span className="text-sm opacity-90">
+                  {classes.length} classe{classes.length > 1 ? 's' : ''} · {eleves(classes)} élève{eleves(classes) > 1 ? 's' : ''}
+                </span>
+              </h2>
+              <div className="grid gap-4 p-4 md:grid-cols-2 xl:grid-cols-3">
+                {classes.map((c) => (
+                  <Carte
+                    key={c.id}
+                    titre={c.nom}
+                    actions={
+                      sg && (
+                        <button type="button" className="bouton-discret" onClick={() => setEdition(c)} aria-label={`Modifier ${c.nom}`}>
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                      )
+                    }
+                  >
+                    <dl className="space-y-1.5 text-sm">
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-encre-2">Spécialité</dt>
+                        <dd className="text-right">{c.specialite?.nom ?? '—'}</dd>
+                      </div>
+                      <div className="flex justify-between">
+                        <dt className="text-encre-2">Élèves</dt>
+                        <dd className="font-semibold tabular-nums">{c._count.inscriptions}</dd>
+                      </div>
+                      <div className="flex justify-between">
+                        <dt className="text-encre-2">Matières</dt>
+                        <dd className="font-semibold tabular-nums">{c._count.matieres}</dd>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-encre-2">Prof. principal</dt>
+                        <dd className="text-right">{c.profPrincipal ? `${c.profPrincipal.prenom} ${c.profPrincipal.nom}` : '—'}</dd>
+                      </div>
+                    </dl>
+                    <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 border-t border-bord pt-3 text-sm">
+                      <Link className="lien" href={`/eleves?classe=${c.id}`}>
+                        Élèves
+                      </Link>
+                      <Link className="lien" href={`/matieres?classe=${c.id}`}>
+                        Matières
+                      </Link>
+                      <button
+                        type="button"
+                        className="lien inline-flex items-center gap-1"
+                        onClick={() => telecharger(`/documents/liste?classeId=${c.id}&format=pdf`, { ouvrir: true }).catch((e) => toast.error(e.message))}
+                      >
+                        <FileText className="h-3.5 w-3.5" /> Liste PDF
+                      </button>
+                      <button
+                        type="button"
+                        className="lien inline-flex items-center gap-1"
+                        onClick={() => telecharger(`/documents/liste?classeId=${c.id}&format=xlsx`).catch((e) => toast.error(e.message))}
+                      >
+                        <FileSpreadsheet className="h-3.5 w-3.5" /> Excel
+                      </button>
+                    </div>
+                  </Carte>
+                ))}
               </div>
-            </Carte>
+            </section>
           ))}
         </div>
       )}
