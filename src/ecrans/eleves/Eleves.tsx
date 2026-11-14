@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { useParametresUrl } from '../../lib/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Camera, Download, FileSpreadsheet, FileText, Loader2, Plus, Search, Upload } from 'lucide-react';
+import { Camera, ClipboardList, Download, Loader2, Plus, Search, Upload } from 'lucide-react';
 import { api, telecharger } from '../../lib/api';
 import { envoyer, useCleEnvoi } from '../../lib/doublons';
 import { requetes } from '../../lib/requetes';
@@ -12,7 +12,8 @@ import { date } from '../../lib/format';
 import type { Classe } from '../../lib/types';
 import { Carte, Chargement, Champ, Erreur, Modale, Page, Vide } from '../../components/ui';
 import { AjoutEleves } from './AjoutEleves';
-import { CelluleSanction, FenetreDecision, type BilanEleve } from '../absences/Bilan';
+import { CelluleSanction, FenetreDecision, texteSanction, type BilanEleve } from '../absences/Bilan';
+import { BoutonsExport, exporterTableau, filtres, type FormatExport } from '../../lib/export';
 import { PhotosEleves } from './PhotosEleves';
 
 export default function Eleves() {
@@ -60,8 +61,51 @@ export default function Eleves() {
     onError: (e) => toast.error(e.message),
   });
 
-  const exporter = (format: 'pdf' | 'xlsx') =>
-    telecharger(`/documents/liste?classeId=${classeId}&format=${format}`, { ouvrir: format === 'pdf' }).catch((e) => toast.error(e.message));
+  // La liste affichée, filtres compris (classe, sanction, recherche).
+  const LIBELLES_SANCTION: Record<string, string> = {
+    AVEC: 'avec une sanction',
+    AVERTISSEMENT: 'avertissement conduite',
+    BLAME: 'blâme conduite',
+    EXCLUSION: 'exclusion',
+    A_DECIDER: 'exclusion à décider',
+  };
+  const exporter = (format: FormatExport) =>
+    exporterTableau(format, {
+      titre: classeId ? `Élèves · ${classes.data?.find((c) => c.id === classeId)?.nom ?? ''}` : 'Élèves',
+      sousTitre: [
+        `Année scolaire ${annee?.libelle ?? ''}`,
+        `${liste.length} élève${liste.length > 1 ? 's' : ''}`,
+        filtres(['Sanction', LIBELLES_SANCTION[sanction]], ['Recherche', recherche && `« ${recherche} »`]),
+      ]
+        .filter(Boolean)
+        .join(' · '),
+      colonnes: [
+        { titre: 'N°', largeur: 0.4, align: 'droite' },
+        { titre: 'Matricule', largeur: 1 },
+        { titre: 'Nom et prénoms', largeur: 2.6, gras: true },
+        { titre: 'Sexe', largeur: 0.4, align: 'centre' },
+        { titre: 'Né(e) le', largeur: 0.9 },
+        { titre: 'Classe', largeur: 1.5 },
+        { titre: 'Mat. national', largeur: 1 },
+        { titre: 'Redoublant', largeur: 0.7 },
+        { titre: 'Sanction', largeur: 1.8 },
+      ],
+      lignes: liste.map((i) => ({
+        c: [
+          i.numero,
+          i.eleve.matricule,
+          `${i.eleve.nom} ${i.eleve.prenoms}`,
+          i.eleve.sexe,
+          date(i.eleve.dateNaissance),
+          i.classe.nom,
+          i.eleve.matriculeNational ?? '',
+          i.redoublant ? 'Oui' : 'Non',
+          texteSanction(parInscription.get(i.id)),
+        ],
+      })),
+      paysage: true,
+      fichier: classeId ? `eleves-${classes.data?.find((c) => c.id === classeId)?.nom ?? ''}` : 'eleves',
+    });
 
   return (
     <Page
@@ -69,6 +113,17 @@ export default function Eleves() {
       description={`Élèves inscrits en ${annee?.libelle ?? ''}. Les élèves renvoyés n'apparaissent pas ici.`}
       actions={
         <>
+          <BoutonsExport exporter={exporter} desactive={!liste.length} />
+          {classeId && (
+            // Liste officielle de la classe (naissance, contact des parents), comme dans Classes.
+            <button
+              type="button"
+              className="bouton-secondaire"
+              onClick={() => telecharger(`/documents/liste?classeId=${classeId}&format=pdf`, { ouvrir: true }).catch((e) => toast.error(e.message))}
+            >
+              <ClipboardList className="h-4 w-4" /> Liste de classe
+            </button>
+          )}
           <button type="button" className="bouton-secondaire" onClick={() => setPhotos(true)} disabled={!classes.data?.length}>
             <Camera className="h-4 w-4" /> Photos
           </button>
@@ -114,16 +169,6 @@ export default function Eleves() {
             <input className="champ pl-9" placeholder="Nom, prénom ou matricule" value={recherche} onChange={(e) => setRecherche(e.target.value)} />
           </div>
         </Champ>
-        {classeId && (
-          <div className="flex gap-2">
-            <button type="button" className="bouton-secondaire" onClick={() => exporter('pdf')}>
-              <FileText className="h-4 w-4" /> Liste PDF
-            </button>
-            <button type="button" className="bouton-secondaire" onClick={() => exporter('xlsx')}>
-              <FileSpreadsheet className="h-4 w-4" /> Excel
-            </button>
-          </div>
-        )}
       </div>
 
       <Carte sansMarge titre={eleves.data ? `${liste.length} élève${liste.length > 1 ? 's' : ''}${sanction ? ` sur ${eleves.data.length}` : ''}` : 'Élèves'}>

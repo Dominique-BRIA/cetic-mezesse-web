@@ -4,7 +4,8 @@ import clsx from 'clsx';
 import { api } from '../../lib/api';
 import { requetes } from '../../lib/requetes';
 import { useApp } from '../../lib/contexte';
-import { classeNote, note, pourcent, rang } from '../../lib/format';
+import { classeNote, libellePeriode, note, pourcent, rang } from '../../lib/format';
+import { BoutonsExport, exporterTableau, type ColonneExport, type FormatExport, type LigneExport } from '../../lib/export';
 import type { Classe, CodePeriode, Matiere, Profil, Rang, Resume, Sexe } from '../../lib/types';
 import { Carte, Chargement, Champ, ChoixPeriode, Erreur, Indicateur, Page, Vide } from '../../components/ui';
 import { BarresHorizontales, Evolution, ParSexe, Repartition } from '../../components/Graphiques';
@@ -74,6 +75,29 @@ export default function Statistiques() {
   );
 }
 
+const sexes = (d: { sexe: Sexe; effectif: number; moyenne: number | null; tauxReussite: number | null }[]): LigneExport[] =>
+  d.map((x) => ({ c: ['', x.sexe === 'F' ? 'Filles' : 'Garçons', x.effectif, note(x.moyenne), '', '', pourcent(x.tauxReussite)] }));
+
+/** Colonnes communes des exports de statistiques : chaque section (classes, matières, sexe…) les remplit à sa façon. */
+const COLONNES_STATS: ColonneExport[] = [
+  { titre: 'Rang', largeur: 0.6 },
+  { titre: 'Libellé', largeur: 3, gras: true },
+  { titre: 'Effectif', largeur: 0.8, align: 'droite' },
+  { titre: 'Moyenne', largeur: 0.9, align: 'droite' },
+  { titre: 'Min – Max', largeur: 1.2, align: 'droite' },
+  { titre: 'Écart-type · moyennes', largeur: 1.1, align: 'droite' },
+  { titre: 'Réussite', largeur: 0.9, align: 'droite' },
+];
+
+/** Barre d'export au-dessus d'une vue. */
+function Export({ exporter }: { exporter: (f: FormatExport) => void }) {
+  return (
+    <div className="flex justify-end gap-2">
+      <BoutonsExport exporter={exporter} />
+    </div>
+  );
+}
+
 function VueEtablissement({ periode }: { periode: CodePeriode }) {
   const { annee } = useApp();
   const q = useQuery(requetes.statsEtablissement<StatsEtablissement>(annee?.id, periode));
@@ -82,8 +106,29 @@ function VueEtablissement({ periode }: { periode: CodePeriode }) {
   const s = q.data!;
   if (!s.resume.effectif) return <Vide titre="Pas encore de notes sur cette période" />;
   const eleve = (e?: EleveClasse) => (e ? `${e.nom} ${e.prenoms}` : '—');
+  const exporter = (format: FormatExport) =>
+    exporterTableau(format, {
+      titre: `Statistiques de l'établissement · ${libellePeriode(periode)}`,
+      sousTitre: `Année scolaire ${annee?.libelle ?? ''} · moyenne générale ${note(s.resume.moyenne)} · réussite ${pourcent(s.resume.tauxReussite)} (${s.resume.reussis} sur ${s.resume.effectif}) · min – max ${note(s.resume.min)} – ${note(s.resume.max)} · écart-type ${note(s.resume.ecartType)}`,
+      colonnes: COLONNES_STATS,
+      lignes: [
+        { groupe: 'Classes' },
+        ...s.classes.map((c) => ({ c: [rang(c.rang), c.nom, c.effectif, note(c.moyenneGenerale), `${note(c.min)} – ${note(c.max)}`, c.nombreMoyennes, pourcent(c.tauxReussite)] })),
+        { groupe: 'Premiers et derniers de l’établissement' },
+        ...s.premier.map((e) => ({ c: ['Premier', `${eleve(e)} (${e.classe.nom})`, '', note(e.moyenne), '', '', ''] })),
+        ...s.dernier.map((e) => ({ c: ['Dernier', `${eleve(e)} (${e.classe.nom})`, '', note(e.moyenne), '', '', ''] })),
+        { groupe: 'Filles et garçons' },
+        ...sexes(s.parSexe),
+        { groupe: 'Répartition des moyennes générales' },
+        ...s.repartition.map((r) => ({ c: ['', r.tranche, r.effectif, '', '', '', ''] })),
+        { groupe: 'Moyenne par matière, toutes classes confondues' },
+        ...s.matieres.map((m) => ({ c: ['', `${m.nom} (${m.classes} classe${m.classes > 1 ? 's' : ''})`, '', note(m.moyenne), '', '', pourcent(m.tauxReussite)] })),
+      ],
+      fichier: `statistiques-etablissement-${periode}`,
+    });
   return (
     <div className="space-y-4">
+      <Export exporter={exporter} />
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Indicateur libelle="Moyenne générale" valeur={note(s.resume.moyenne)} accent detail={`${s.resume.effectif} élèves classés`} />
         <Indicateur libelle="Taux de réussite" valeur={pourcent(s.resume.tauxReussite)} detail={`${s.resume.reussis} élèves à 10 ou plus`} />
@@ -193,8 +238,35 @@ function VueClasse({ periode }: { periode: CodePeriode }) {
     queryFn: () => api<StatsClasse>(`/statistiques/classe?classeId=${classeId}&periode=${periode}`),
     enabled: Boolean(classeId),
   });
+  const exporter = (format: FormatExport) => {
+    const d = q.data;
+    if (!d) return;
+    exporterTableau(format, {
+      titre: `Statistiques · ${d.classe.nom} · ${libellePeriode(periode)}`,
+      sousTitre: `Moyenne de la classe ${note(d.profil.moyenneGenerale)} · réussite ${pourcent(d.profil.tauxReussite)} · min – max ${note(d.profil.min)} – ${note(d.profil.max)} · écart-type ${note(d.profil.ecartType)} · ${d.profil.effectif} élèves`,
+      colonnes: COLONNES_STATS,
+      lignes: [
+        { groupe: 'Matières (coefficient · enseignant)' },
+        ...d.matieres.map((m) => ({
+          c: m.evaluee
+            ? ['', `${m.nom} (coef ${m.coefficient}${m.professeur ? ` · ${m.professeur}` : ''})`, '', note(m.moyenne), `${note(m.min)} – ${note(m.max)}`, note(m.ecartType), pourcent(m.tauxReussite)]
+            : ['', `${m.nom} (coef ${m.coefficient})`, '', "Pas d'évaluation", '', '', ''],
+        })),
+        { groupe: 'Évolution de la moyenne de classe' },
+        ...d.evolution.map((e) => ({ c: ['', e.periode, '', note(e.moyenne), '', '', pourcent(e.tauxReussite)] })),
+        { groupe: 'Filles et garçons' },
+        ...sexes(d.parSexe),
+        { groupe: 'Répartition des moyennes' },
+        ...d.repartition.map((r) => ({ c: ['', r.tranche, r.effectif, '', '', '', ''] })),
+        { groupe: 'Classement de la classe' },
+        ...d.classement.map((e) => ({ c: [rang(e.rang), `${e.nom} ${e.prenoms}`, e.sexe, note(e.moyenne), '', '', ''] })),
+      ],
+      fichier: `statistiques-${d.classe.nom}-${periode}`,
+    });
+  };
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
       <Champ libelle="Classe" className="max-w-xs">
         <select className="champ" value={classeId} onChange={(e) => setChoix(e.target.value)}>
           {classes.data?.map((c) => (
@@ -204,6 +276,12 @@ function VueClasse({ periode }: { periode: CodePeriode }) {
           ))}
         </select>
       </Champ>
+        {q.data && q.data.profil.moyenneGenerale !== null && (
+          <div className="flex gap-2">
+            <BoutonsExport exporter={exporter} />
+          </div>
+        )}
+      </div>
       {q.isLoading ? (
         <Chargement />
       ) : q.error ? (
@@ -312,7 +390,7 @@ function VueMatiere({ periode }: { periode: CodePeriode }) {
           </select>
         </Champ>
       </div>
-      {matiereId && <StatistiquesMatiere matiereId={matiereId} periode={periode} />}
+      {matiereId && <StatistiquesMatiere matiereId={matiereId} periode={periode} exportable />}
     </div>
   );
 }

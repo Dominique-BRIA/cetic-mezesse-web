@@ -7,6 +7,8 @@ import { classeNote, note, pourcent, rang } from '../../lib/format';
 import type { CodePeriode, Rang, Resume, Sexe } from '../../lib/types';
 import { Carte, Chargement, Champ, ChoixPeriode, Erreur, Indicateur, Page, Vide } from '../../components/ui';
 import { Evolution, ParSexe, Repartition } from '../../components/Graphiques';
+import { BoutonsExport, exporterTableau, type FormatExport } from '../../lib/export';
+import { libellePeriode } from '../../lib/format';
 
 export interface StatsMatiere {
   matiere: { id: string; nom: string; coefficient: number; classe: { nom: string } };
@@ -54,7 +56,8 @@ export default function StatsMatieres() {
   );
 }
 
-export function StatistiquesMatiere({ matiereId, periode }: { matiereId: string; periode: CodePeriode }) {
+/** « exportable » : boutons Excel et PDF (direction seulement, l'export lui est réservé). */
+export function StatistiquesMatiere({ matiereId, periode, exportable }: { matiereId: string; periode: CodePeriode; exportable?: boolean }) {
   const q = useQuery({
     queryKey: ['stats-matiere', matiereId, periode],
     queryFn: () => api<StatsMatiere>(`/statistiques/matiere?matiereId=${matiereId}&periode=${periode}`),
@@ -65,8 +68,36 @@ export function StatistiquesMatiere({ matiereId, periode }: { matiereId: string;
   const s = q.data!;
   if (!s.resume.evaluee) return <Vide titre="Pas encore de notes sur cette période">Les statistiques apparaîtront après la saisie.</Vide>;
   const r = s.resume;
+  const exporter = (format: FormatExport) =>
+    exporterTableau(format, {
+      titre: `Statistiques · ${s.matiere.nom} · ${s.matiere.classe.nom} · ${libellePeriode(periode)}`,
+      sousTitre: `Coefficient ${s.matiere.coefficient} · moyenne ${note(r.moyenne)} sur ${r.effectif} élèves · réussite ${pourcent(r.tauxReussite)} · min – max ${note(r.min)} – ${note(r.max)} · écart-type ${note(r.ecartType)}`,
+      colonnes: [
+        { titre: 'Rang', largeur: 0.6 },
+        { titre: 'Élève', largeur: 3, gras: true },
+        { titre: 'Sexe', largeur: 0.5, align: 'centre' },
+        { titre: 'Note', largeur: 0.8, align: 'droite' },
+        { titre: 'Grade', largeur: 0.7, align: 'centre' },
+      ],
+      lignes: [
+        { groupe: 'Notes des élèves, de la meilleure à la plus faible' },
+        ...s.eleves.map((e) => ({ c: [rang(e.rang), `${e.nom} ${e.prenoms}`, e.sexe, note(e.note), e.grade] })),
+        { groupe: 'Grades obtenus' },
+        ...s.grades.map((g) => ({ c: ['', g.grade, '', g.effectif, pourcent(r.effectif ? (g.effectif / r.effectif) * 100 : null)] })),
+        { groupe: 'Filles et garçons (effectif · moyenne · réussite)' },
+        ...s.parSexe.map((x) => ({ c: ['', x.sexe === 'F' ? 'Filles' : 'Garçons', x.effectif, note(x.moyenne), pourcent(x.tauxReussite)] })),
+        { groupe: 'Évolution de la moyenne sur les séquences' },
+        ...s.evolution.map((e) => ({ c: ['', e.periode, '', e.evaluee ? note(e.moyenne) : '', ''] })),
+      ],
+      fichier: `statistiques-${s.matiere.nom}-${s.matiere.classe.nom}-${periode}`,
+    });
   return (
     <div className="space-y-4">
+      {exportable && (
+        <div className="flex justify-end gap-2">
+          <BoutonsExport exporter={exporter} />
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Indicateur libelle="Moyenne de la classe" valeur={note(r.moyenne)} accent detail={`sur ${r.effectif} élèves`} />
         <Indicateur libelle="Taux de réussite" valeur={pourcent(r.tauxReussite)} detail={`${r.reussis} à 10 ou plus`} />

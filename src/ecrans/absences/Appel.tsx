@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import clsx from 'clsx';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { CalendarCheck, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Circle, Loader2, MinusCircle, MoreVertical, Plus, Save, Trash2, UserX, X } from 'lucide-react';
-import { api, ErreurApi } from '../../lib/api';
+import { CalendarCheck, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Circle, FileSpreadsheet, FileText, Loader2, MinusCircle, MoreVertical, Plus, Save, Trash2, UserX, X } from 'lucide-react';
+import { api, ErreurApi, telecharger } from '../../lib/api';
 import { requetes } from '../../lib/requetes';
 import { useApp } from '../../lib/contexte';
 import { useParametresUrl } from '../../lib/navigation';
@@ -199,6 +199,8 @@ export default function Appel() {
     enabled: Boolean(classeId) && Boolean(date),
   });
   const v = q.data;
+  const exporterFeuille = (format: 'xlsx' | 'pdf') =>
+    telecharger(`/appel/export?classeId=${classeId}&date=${date}&format=${format}`, { ouvrir: format === 'pdf' }).catch((e) => toast.error(e.message));
   const enregistrees = useMemo(() => new Set((v?.absences ?? []).map((x) => cle(x.seanceId, x.inscriptionId))), [v]);
   const [cases, setCases] = useState<Set<string>>(new Set());
   const [sequenceChoisie, setSequenceChoisie] = useState('');
@@ -482,6 +484,19 @@ export default function Appel() {
     <Page
       titre="Feuille d'appel"
       description="Tout le monde est présent par défaut : cochez seulement les absents. La saisie reste sur cet appareil jusqu'à l'enregistrement."
+      actions={
+        classeId && (
+          <>
+            {/* La feuille enregistrée de ce jour (vide si l'appel n'est pas encore fait : à remplir à la main). */}
+            <button type="button" className="bouton-secondaire" onClick={() => exporterFeuille('xlsx')} disabled={!v?.eleves.length}>
+              <FileSpreadsheet className="h-4 w-4" /> Excel
+            </button>
+            <button type="button" className="bouton-secondaire" onClick={() => exporterFeuille('pdf')} disabled={!v?.eleves.length}>
+              <FileText className="h-4 w-4" /> PDF
+            </button>
+          </>
+        )
+      }
     >
       <div className="flex flex-wrap items-end gap-3">
         <Champ libelle="Classe" className="w-full max-w-xs">

@@ -10,6 +10,7 @@ import { useApp } from '../../lib/contexte';
 import { nomClasse } from '../../lib/format';
 import type { Classe, Enseignant, Specialite } from '../../lib/types';
 import { Carte, Chargement, Champ, Erreur, Modale, Page, Vide } from '../../components/ui';
+import { BoutonsExport, exporterTableau, type FormatExport, type LigneExport } from '../../lib/export';
 
 const libelleNiveau = (n: number) => `${n === 1 ? '1re' : `${n}e`} année`;
 const eleves = (classes: Classe[]) => classes.reduce((n, c) => n + c._count.inscriptions, 0);
@@ -29,12 +30,38 @@ export default function Classes() {
   const [edition, setEdition] = useState<Classe | 'nouvelle' | null>(null);
   const [specialites, setSpecialites] = useState(false);
   const sg = a('SURVEILLANT_GENERAL');
+  // Toutes les classes, rangées par niveau comme à l'écran.
+  const exporter = (format: FormatExport) => {
+    const lignes: LigneExport[] = [];
+    for (const [niveau, classes] of parNiveau(q.data ?? [])) {
+      lignes.push({ groupe: `${libelleNiveau(niveau)} · ${classes.length} classe${classes.length > 1 ? 's' : ''} · ${eleves(classes)} élèves` });
+      for (const c of classes)
+        lignes.push({
+          c: [c.nom, c.specialite?.nom ?? '', c._count.inscriptions, c._count.matieres, c.profPrincipal ? `${c.profPrincipal.prenom} ${c.profPrincipal.nom}` : ''],
+        });
+    }
+    lignes.push({ c: ['Établissement', '', eleves(q.data ?? []), '', ''], gras: true });
+    exporterTableau(format, {
+      titre: 'Classes',
+      sousTitre: `Année scolaire ${annee?.libelle ?? ''} · ${q.data?.length ?? 0} classes`,
+      colonnes: [
+        { titre: 'Classe', largeur: 2, gras: true },
+        { titre: 'Spécialité', largeur: 2 },
+        { titre: 'Élèves', largeur: 0.7, align: 'droite' },
+        { titre: 'Matières', largeur: 0.7, align: 'droite' },
+        { titre: 'Prof. principal', largeur: 2 },
+      ],
+      lignes,
+    });
+  };
 
   return (
     <Page
       titre="Classes"
       actions={
-        sg && (
+        <>
+          <BoutonsExport exporter={exporter} desactive={!q.data?.length} />
+          {sg && (
           <>
             <button type="button" className="bouton-secondaire" onClick={() => setSpecialites(true)}>
               <Tags className="h-4 w-4" /> Spécialités
@@ -43,7 +70,8 @@ export default function Classes() {
               <Plus className="h-4 w-4" /> Nouvelle classe
             </button>
           </>
-        )
+          )}
+        </>
       }
     >
       {q.isLoading ? (

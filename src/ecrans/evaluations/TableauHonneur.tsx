@@ -2,13 +2,14 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Award, FileText } from 'lucide-react';
+import { Award, FileSpreadsheet, FileText } from 'lucide-react';
 import { telecharger } from '../../lib/api';
 import { requetes } from '../../lib/requetes';
 import { useApp } from '../../lib/contexte';
 import { libellePeriode, note, rang } from '../../lib/format';
 import type { CodePeriode } from '../../lib/types';
 import { Carte, Chargement, Champ, ChoixPeriode, Erreur, Page, Vide } from '../../components/ui';
+import { exporterTableau, type LigneExport } from '../../lib/export';
 
 // Tableau d'honneur : élèves dont la moyenne de la période atteint le seuil réglé dans les Paramètres.
 export default function TableauHonneur() {
@@ -21,6 +22,29 @@ export default function TableauHonneur() {
   const imprimer = (format: 'liste' | 'certificats') =>
     telecharger(`/tableau-honneur/pdf?${filtre}&format=${format}`, { ouvrir: true }).catch((e: Error) => toast.error(e.message));
   const vide = !q.data?.total;
+  // Le PDF officiel existe déjà (Liste PDF) ; le classeur Excel reprend la même liste, classe par classe.
+  const excel = () => {
+    const d = q.data;
+    if (!d) return;
+    const lignes: LigneExport[] = [];
+    for (const c of d.classes.filter((x) => x.eleves.length)) {
+      lignes.push({ groupe: `${c.nom} · ${c.eleves.length} sur ${c.effectif}` });
+      for (const e of c.eleves) lignes.push({ c: [rang(e.rang), `${e.nom} ${e.prenoms}`, e.matricule, e.sexe, note(e.moyenne)] });
+    }
+    exporterTableau('xlsx', {
+      titre: `Tableau d'honneur · ${libellePeriode(periode)}`,
+      sousTitre: `${d.annee} · moyenne d'au moins ${note(d.seuil)} · ${d.total} élève(s)`,
+      colonnes: [
+        { titre: 'Rang', largeur: 0.6 },
+        { titre: 'Élève', largeur: 3, gras: true },
+        { titre: 'Matricule', largeur: 1.1 },
+        { titre: 'Sexe', largeur: 0.5 },
+        { titre: 'Moyenne', largeur: 0.8, align: 'droite' },
+      ],
+      lignes,
+      fichier: `tableau-honneur-${periode}`,
+    });
+  };
 
   return (
     <Page
@@ -34,6 +58,9 @@ export default function TableauHonneur() {
       }
       actions={
         <>
+          <button type="button" className="bouton-secondaire" disabled={vide} onClick={excel}>
+            <FileSpreadsheet className="h-4 w-4" /> Excel
+          </button>
           <button type="button" className="bouton-secondaire" disabled={vide} onClick={() => imprimer('liste')}>
             <FileText className="h-4 w-4" /> Liste PDF
           </button>

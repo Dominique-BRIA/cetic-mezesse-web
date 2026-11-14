@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import clsx from 'clsx';
-import { FileSpreadsheet } from 'lucide-react';
+import { FileSpreadsheet, FileText } from 'lucide-react';
 import { api, telecharger } from '../../lib/api';
 import { requetes } from '../../lib/requetes';
 import { useApp } from '../../lib/contexte';
@@ -11,6 +11,7 @@ import { classeNote, libellePeriode, note, pourcent, rang } from '../../lib/form
 import type { CodePeriode, Profil, Rang } from '../../lib/types';
 import { Carte, Chargement, Champ, ChoixPeriode, Erreur, Page, Vide } from '../../components/ui';
 import { ListeManquantes, type Manquantes } from '../prof/Manquantes';
+import { exporterTableau } from '../../lib/export';
 
 interface Releve {
   classe: { id: string; nom: string; annee: string };
@@ -27,6 +28,36 @@ export default function Notes() {
   const [vue, setVue] = useState<'releve' | 'manquantes'>('releve');
   const classeId = choix || classes.data?.[0]?.id || '';
   const sequence = annee?.sequences.find((s) => `S${s.numero}` === periode);
+  // Même requête que le tableau (partagée par le cache) : le PDF reprend le relevé affiché.
+  const releve = useQuery({
+    queryKey: ['releve', classeId, periode],
+    queryFn: () => api<Releve>(`/notes/classe?classeId=${classeId}&periode=${periode}`),
+    enabled: Boolean(classeId) && vue === 'releve',
+  });
+  const pdf = () => {
+    const r = releve.data;
+    if (!r) return;
+    exporterTableau('pdf', {
+      titre: `Relevé de notes · ${r.classe.nom} · ${libellePeriode(periode)}`,
+      sousTitre: `Année scolaire ${r.classe.annee} · moyenne de classe ${note(r.profil.moyenneGenerale)} · réussite ${pourcent(r.profil.tauxReussite)}`,
+      colonnes: [
+        { titre: 'Rang', largeur: 0.6 },
+        { titre: 'N°', largeur: 0.4, align: 'droite' },
+        { titre: 'Élève', largeur: 3, gras: true },
+        ...r.matieres.map((m) => ({ titre: `${m.nom}\ncoef ${m.coefficient}`, align: 'droite' as const })),
+        { titre: 'Moyenne', largeur: 1.1, align: 'droite', gras: true },
+      ],
+      lignes: [
+        ...tri(r.eleves).map((e) => ({
+          c: [rang(e.rang), e.numero, `${e.nom} ${e.prenoms}`, ...e.notes.map((n, i) => (r.matieres[i].evaluee ? note(n) : '')), note(e.moyenne)],
+        })),
+        { c: ['', '', 'Moyenne de classe', ...r.matieres.map((m) => (m.evaluee ? note(m.moyenne) : '')), note(r.profil.moyenneGenerale)], gras: true },
+      ],
+      paysage: true,
+      signature: 'Le Directeur',
+      fichier: `releve-${r.classe.nom}-${periode}`,
+    });
+  };
 
   return (
     <Page
@@ -34,13 +65,18 @@ export default function Notes() {
       description="Relevé des notes d'une classe, moyennes et rangs, et suivi des notes qui manquent encore."
       actions={
         classeId && (
-          <button
-            type="button"
-            className="bouton-secondaire"
-            onClick={() => telecharger(`/documents/releve?classeId=${classeId}&periode=${periode}`).catch((e) => toast.error(e.message))}
-          >
-            <FileSpreadsheet className="h-4 w-4" /> Exporter en Excel
-          </button>
+          <>
+            <button
+              type="button"
+              className="bouton-secondaire"
+              onClick={() => telecharger(`/documents/releve?classeId=${classeId}&periode=${periode}`).catch((e) => toast.error(e.message))}
+            >
+              <FileSpreadsheet className="h-4 w-4" /> Excel
+            </button>
+            <button type="button" className="bouton-secondaire" onClick={pdf} disabled={vue !== 'releve' || !releve.data?.eleves.length}>
+              <FileText className="h-4 w-4" /> PDF
+            </button>
+          </>
         )
       }
     >
@@ -85,6 +121,11 @@ export default function Notes() {
   );
 }
 
+/** Par rang, puis par nom (les non classés à la fin). */
+function tri(eleves: Releve['eleves']) {
+  return [...eleves].sort((a, b) => (a.rang?.rang ?? 999) - (b.rang?.rang ?? 999) || a.nom.localeCompare(b.nom));
+}
+
 function TableReleve({ classeId, periode }: { classeId: string; periode: CodePeriode }) {
   const q = useQuery({
     queryKey: ['releve', classeId, periode],
@@ -94,7 +135,7 @@ function TableReleve({ classeId, periode }: { classeId: string; periode: CodePer
   if (q.error) return <Erreur erreur={q.error} />;
   const r = q.data!;
   if (!r.eleves.length) return <Vide titre="Aucun élève dans cette classe" />;
-  const tries = [...r.eleves].sort((a, b) => (a.rang?.rang ?? 999) - (b.rang?.rang ?? 999) || a.nom.localeCompare(b.nom));
+  const tries = tri(r.eleves);
   return (
     <Carte
       sansMarge

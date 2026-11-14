@@ -7,14 +7,37 @@ import { date } from '../../lib/format';
 import type { Inscription } from '../../lib/types';
 import { Carte, Chargement, Erreur, Page, Vide } from '../../components/ui';
 import { Reintegration } from './FicheEleve';
+import { BoutonsExport, exporterTableau, type FormatExport } from '../../lib/export';
 
 export default function Renvoyes() {
   const { a, annee } = useApp();
   const q = useQuery(requetes.renvoyes(annee?.id));
   const [choix, setChoix] = useState<Inscription | null>(null);
+  const exporter = (format: FormatExport) =>
+    exporterTableau(format, {
+      titre: 'Élèves renvoyés',
+      sousTitre: `Année scolaire ${annee?.libelle ?? ''} · ${q.data?.length ?? 0} élève(s)`,
+      colonnes: [
+        { titre: 'Élève', largeur: 2.2, gras: true },
+        { titre: 'Matricule', largeur: 1 },
+        { titre: 'Classe', largeur: 1.5 },
+        { titre: 'Renvoyé le', largeur: 0.9 },
+        { titre: 'Motif', largeur: 2.6 },
+        { titre: 'Décidé par', largeur: 1.4 },
+      ],
+      lignes: (q.data ?? []).map((i) => {
+        const r = i.renvois[0];
+        return { c: [`${i.eleve.nom} ${i.eleve.prenoms}`, i.eleve.matricule, i.classe.nom, date(r?.date), r?.motif, r ? `${r.par.prenom} ${r.par.nom}` : ''] };
+      }),
+      signature: 'Le Directeur',
+    });
 
   return (
-    <Page titre="Élèves renvoyés" description={`Élèves retirés de la liste principale en ${annee?.libelle ?? ''}. Seul le Directeur peut les réintégrer.`}>
+    <Page
+      titre="Élèves renvoyés"
+      description={`Élèves retirés de la liste principale en ${annee?.libelle ?? ''}. Seul le Directeur peut les réintégrer.`}
+      actions={<BoutonsExport exporter={exporter} desactive={!q.data?.length} />}
+    >
       <Carte sansMarge>
         {q.isLoading ? (
           <div className="px-4">

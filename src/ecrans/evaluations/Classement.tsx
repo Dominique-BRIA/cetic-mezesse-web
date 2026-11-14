@@ -9,6 +9,7 @@ import { classeNote, libellePeriode, note, rang } from '../../lib/format';
 import type { CodePeriode } from '../../lib/types';
 import { Carte, Chargement, Champ, ChoixPeriode, Erreur, Page, Vide } from '../../components/ui';
 import type { StatsEtablissement } from './Statistiques';
+import { BoutonsExport, exporterTableau, filtres, type FormatExport } from '../../lib/export';
 
 export default function Classement() {
   const { annee } = useApp();
@@ -22,8 +23,36 @@ export default function Classement() {
     (e) => (!classe || e.classe.id === classe) && `${e.nom} ${e.prenoms} ${e.matricule}`.toLowerCase().includes(filtre.toLowerCase()),
   );
 
+  // Le classement affiché (classe et recherche comprises).
+  const exporter = (format: FormatExport) =>
+    exporterTableau(format, {
+      titre: `Classement général · ${libellePeriode(periode)}`,
+      sousTitre: [
+        `Année scolaire ${annee?.libelle ?? ''}`,
+        `${total} élèves classés`,
+        filtres(['Classe', q.data?.classes.find((c) => c.id === classe)?.nom], ['Recherche', filtre && `« ${filtre} »`]),
+      ]
+        .filter(Boolean)
+        .join(' · '),
+      colonnes: [
+        { titre: 'Rang', largeur: 0.7 },
+        { titre: 'Élève', largeur: 3, gras: true },
+        { titre: 'Matricule', largeur: 1.1 },
+        { titre: 'Classe', largeur: 2 },
+        { titre: 'Rang en classe', largeur: 1 },
+        { titre: 'Moyenne', largeur: 0.9, align: 'droite', gras: true },
+      ],
+      lignes: lignes.map((e) => ({ c: [rang(e.rang), `${e.nom} ${e.prenoms}`, e.matricule, e.classe.nom, rang(e.rangClasse), note(e.moyenne)] })),
+      signature: 'Le Directeur',
+      fichier: `classement-general-${periode}`,
+    });
+
   return (
-    <Page titre="Classement général" description="Tous les élèves de l'établissement classés par moyenne générale, toutes classes confondues.">
+    <Page
+      titre="Classement général"
+      description="Tous les élèves de l'établissement classés par moyenne générale, toutes classes confondues."
+      actions={<BoutonsExport exporter={exporter} desactive={!lignes.length} />}
+    >
       <div className="flex flex-wrap items-end gap-3">
         <Champ libelle="Période">
           <ChoixPeriode valeur={periode} changer={setPeriode} />

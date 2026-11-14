@@ -8,6 +8,7 @@ import { api } from '../../lib/api';
 import { useApp } from '../../lib/contexte';
 import { Carte, Chargement, Erreur, Etat, Page, Vide } from '../../components/ui';
 import { FusionModale, type TypeFusion } from '../../components/Fusion';
+import { confirmer } from '../../lib/confirmation';
 
 interface Point {
   cle: string;
@@ -104,7 +105,24 @@ export default function AVerifier() {
           <GitMerge className="h-4 w-4" /> Fusionner
         </button>
       )}
-      <button type="button" className="bouton-discret" disabled={marquer.isPending} onClick={() => marquer.mutate(p)}>
+      <button
+        type="button"
+        className="bouton-discret"
+        disabled={marquer.isPending}
+        onClick={async () => {
+          // « C'est normal » retire le point de la liste : on le confirme ; le faire revenir se fait sans question.
+          if (
+            p.ignore ||
+            (await confirmer({
+              titre: "C'est normal ?",
+              message: p.titre,
+              note: "Ce point ne sera plus signalé. Vous pourrez le revoir avec « Afficher les points jugés normaux », puis « Signaler de nouveau ».",
+              action: "Oui, c'est normal",
+            }))
+          )
+            marquer.mutate(p);
+        }}
+      >
         {p.ignore ? (
           <>
             <RotateCcw className="h-4 w-4" /> Signaler de nouveau

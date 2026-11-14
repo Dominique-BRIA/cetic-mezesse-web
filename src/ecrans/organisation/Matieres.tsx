@@ -10,6 +10,7 @@ import { useApp } from '../../lib/contexte';
 import type { Enseignant, Groupe, Matiere } from '../../lib/types';
 import { Carte, Chargement, Champ, Erreur, Modale, Page, Vide } from '../../components/ui';
 import { confirmer } from '../../lib/confirmation';
+import { BoutonsExport, exporterTableau, type FormatExport, type LigneExport } from '../../lib/export';
 
 export default function Matieres() {
   const { a, annee } = useApp();
@@ -57,17 +58,44 @@ export default function Matieres() {
   }
   const groupes = [...parGroupe.values()].sort((x, y) => x.ordre - y.ordre);
   const totalCoef = matieres.data?.reduce((s, m) => s + m.coefficient, 0) ?? 0;
+  // Les matières de la classe, par groupe comme sur le bulletin.
+  const exporter = (format: FormatExport) => {
+    const lignes: LigneExport[] = [];
+    for (const g of groupes) {
+      lignes.push({ groupe: `${g.nom} · coef ${g.matieres.reduce((s, m) => s + m.coefficient, 0)}` });
+      for (const m of g.matieres)
+        lignes.push({ c: [m.ordre, m.nom, m.nomEn ?? '', m.coefficient, m.professeur ? `${m.professeur.prenom} ${m.professeur.nom}` : 'Non attribuée', m._count.notes] });
+    }
+    lignes.push({ c: ['', 'Total des coefficients', '', totalCoef, '', ''], gras: true });
+    exporterTableau(format, {
+      titre: `Matières · ${classe?.nom ?? ''}`,
+      sousTitre: `Année scolaire ${annee?.libelle ?? ''} · ${matieres.data?.length ?? 0} matières`,
+      colonnes: [
+        { titre: 'Ordre', largeur: 0.5, align: 'droite' },
+        { titre: 'Matière', largeur: 2.2, gras: true },
+        { titre: 'En anglais', largeur: 2 },
+        { titre: 'Coef', largeur: 0.5, align: 'droite' },
+        { titre: 'Enseignant', largeur: 2 },
+        { titre: 'Notes', largeur: 0.6, align: 'droite' },
+      ],
+      lignes,
+    });
+  };
 
   return (
     <Page
       titre="Matières"
       description="Les matières de chaque classe, leur groupe, leur coefficient et l'enseignant qui en a la charge."
       actions={
-        sg &&
         classeId && (
-          <button type="button" className="bouton-primaire" onClick={() => setEdition('nouvelle')}>
-            <Plus className="h-4 w-4" /> Nouvelle matière
-          </button>
+          <>
+            <BoutonsExport exporter={exporter} desactive={!matieres.data?.length} />
+            {sg && (
+              <button type="button" className="bouton-primaire" onClick={() => setEdition('nouvelle')}>
+                <Plus className="h-4 w-4" /> Nouvelle matière
+              </button>
+            )}
+          </>
         )
       }
     >

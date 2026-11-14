@@ -8,6 +8,7 @@ import { useApp } from '../../lib/contexte';
 import type { Classe, Groupe } from '../../lib/types';
 import { Carte, Chargement, Champ, Erreur, Modale, Page, Vide } from '../../components/ui';
 import { confirmer } from '../../lib/confirmation';
+import { BoutonsExport, exporterTableau, type FormatExport } from '../../lib/export';
 
 export default function Groupes() {
   const { a, annee } = useApp();
@@ -24,16 +25,33 @@ export default function Groupes() {
     onError: (e) => toast.error(e.message),
   });
 
+  const exporter = (format: FormatExport) =>
+    exporterTableau(format, {
+      titre: 'Groupes de matières',
+      sousTitre: `Année scolaire ${annee?.libelle ?? ''} · ${q.data?.length ?? 0} groupes`,
+      colonnes: [
+        { titre: 'Ordre', largeur: 0.5, align: 'droite' },
+        { titre: 'Groupe', largeur: 2, gras: true },
+        { titre: 'En anglais', largeur: 1.8 },
+        { titre: 'Classes', largeur: 4 },
+        { titre: 'Matières', largeur: 0.7, align: 'droite' },
+      ],
+      lignes: (q.data ?? []).map((g) => ({ c: [g.ordre, g.nom, g.nomEn ?? '', g.classes.map((c) => c.nom).join(', '), g._count.matieres] })),
+    });
+
   return (
     <Page
       titre="Groupes de matières"
       description="Les groupes structurent le bulletin (sous-totaux et moyennes par groupe). Un même groupe peut servir à plusieurs classes."
       actions={
-        sg && (
-          <button type="button" className="bouton-primaire" onClick={() => setEdition('nouveau')}>
-            <Plus className="h-4 w-4" /> Nouveau groupe
-          </button>
-        )
+        <>
+          <BoutonsExport exporter={exporter} desactive={!q.data?.length} />
+          {sg && (
+            <button type="button" className="bouton-primaire" onClick={() => setEdition('nouveau')}>
+              <Plus className="h-4 w-4" /> Nouveau groupe
+            </button>
+          )}
+        </>
       }
     >
       <Carte sansMarge>

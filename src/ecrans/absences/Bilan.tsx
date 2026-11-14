@@ -76,6 +76,15 @@ function resume(d: Decision) {
   return `sursis accordé le ${jjmm(d.date)}`;
 }
 
+/** La sanction en texte, pour les exports : comme à l'écran, avec l'exclusion encore à décider. */
+export function texteSanction(e: BilanEleve | undefined) {
+  if (!e) return '';
+  let s = e.libelleSanction ?? '';
+  if (s === 'Exclusion temporaire' && e.joursExclusion > 0) s += ` · ${jours(e.joursExclusion)}`;
+  if (e.palierExclusion && !e.decision) s += `${s ? ' · ' : ''}exclusion à décider`;
+  return s;
+}
+
 export function Sanction({ e }: { e: BilanEleve }) {
   if (!e.libelleSanction) return <span className="text-encre-3">—</span>;
   if (e.sanction === 'EXCLUSION')

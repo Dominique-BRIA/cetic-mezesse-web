@@ -11,6 +11,7 @@ import type { Enseignant } from '../../lib/types';
 import { Carte, Chargement, Champ, Erreur, Etat, Modale, Page, Vide } from '../../components/ui';
 import { type Carriere, carriereDe, ChampsCarriere, corpsCarriere } from '../../components/Carriere';
 import { confirmer } from '../../lib/confirmation';
+import { BoutonsExport, exporterTableau, filtres, type FormatExport } from '../../lib/export';
 
 export default function Enseignants() {
   const { a, annee } = useApp();
@@ -32,16 +33,51 @@ export default function Enseignants() {
     `${p.nom} ${p.prenom} ${p.discipline ?? ''} ${p.telephone ?? ''}`.toLowerCase().includes(filtre.toLowerCase()),
   );
 
+  const etat = (p: Enseignant) =>
+    p.fusionneDansId ? 'Fusionné' : !p.actif ? 'Désactivé' : p.doitChangerMotDePasse ? 'Mot de passe provisoire' : 'Actif';
+  // La liste affichée (recherche comprise) ; les matières de chacun dans une seule case.
+  const exporter = (format: FormatExport) =>
+    exporterTableau(format, {
+      titre: 'Enseignants',
+      sousTitre: [`Année scolaire ${annee?.libelle ?? ''}`, `${liste.length} enseignant(s)`, filtres(['Recherche', filtre && `« ${filtre} »`])]
+        .filter(Boolean)
+        .join(' · '),
+      colonnes: [
+        { titre: 'Enseignant', largeur: 1.8, gras: true },
+        { titre: 'Grade · discipline', largeur: 1.6 },
+        { titre: 'Téléphone', largeur: 1 },
+        { titre: 'E-mail', largeur: 1.6 },
+        { titre: 'Matières enseignées', largeur: 3.6 },
+        { titre: 'Prof. principal', largeur: 1.4 },
+        { titre: 'État', largeur: 1 },
+      ],
+      lignes: liste.map((p) => ({
+        c: [
+          `${p.nom} ${p.prenom}`,
+          [p.grade, p.discipline].filter(Boolean).join(' · '),
+          p.telephone ?? '',
+          p.email ?? '',
+          p.matieres.map((m) => `${m.nom} (${m.classe.nom})`).join(' ; '),
+          p.classesPrincipales.map((c) => c.nom).join(', '),
+          etat(p),
+        ],
+      })),
+      paysage: true,
+    });
+
   return (
     <Page
       titre="Enseignants"
       description="Comptes des professeurs, leurs matières et leurs classes pour l'année consultée."
       actions={
-        sg && (
-          <button type="button" className="bouton-primaire" onClick={() => setEdition('nouveau')}>
-            <Plus className="h-4 w-4" /> Nouvel enseignant
-          </button>
-        )
+        <>
+          <BoutonsExport exporter={exporter} desactive={!liste.length} />
+          {sg && (
+            <button type="button" className="bouton-primaire" onClick={() => setEdition('nouveau')}>
+              <Plus className="h-4 w-4" /> Nouvel enseignant
+            </button>
+          )}
+        </>
       }
     >
       <div className="relative max-w-sm">
