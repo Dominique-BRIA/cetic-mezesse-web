@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   AlertCircle,
+  CalendarDays,
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
@@ -18,6 +19,7 @@ import {
   Settings2,
   ShieldCheck,
   Trash2,
+  Users,
   X,
 } from 'lucide-react';
 import { api, telecharger, urlProtegee } from '../../lib/api';
@@ -28,6 +30,7 @@ import { duree } from '../../lib/format';
 import type { Classe, Matiere } from '../../lib/types';
 import { Carte, Chargement, Champ, Erreur, Modale, Page, Vide } from '../../components/ui';
 import { aujourdhui } from './Appel';
+import { confirmer } from '../../lib/confirmation';
 
 export interface Piece {
   id: string;
@@ -65,6 +68,8 @@ export interface Ligne {
   duree: number;
   enseignantAbsent: boolean;
   justification: JustificationVue | null;
+  /** Numéro d'ordre de l'élève dans sa classe. */
+  numero: number;
 }
 
 export interface PageAbsences {
@@ -91,6 +96,8 @@ interface Historique {
 }
 
 const TAILLE = 50;
+// Vue par élève : tout d'un coup (maximum de l'API), pour ne pas couper un élève entre deux pages.
+const TAILLE_PAR_ELEVE = 200;
 const TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
 const MAX_OCTETS = 3 * 1024 * 1024;
 const MAX_PIECES = 5;
@@ -139,8 +146,15 @@ function periodes(): { code: string; libelle: string; du: string; au: string }[]
 /** État d'une absence : pastille avec fond, icône et mot (la couleur seule ne suffit pas). */
 export function PastilleEtat({ justification }: { justification: JustificationVue | null }) {
   return justification ? (
-    <span className="inline-flex items-center gap-1 rounded-full bg-succes/10 px-2 py-0.5 text-xs font-semibold text-succes">
-      <CheckCircle2 className="h-3.5 w-3.5" /> Justifiée · {justification.motif}
+    <span className="inline-flex flex-wrap items-center gap-2">
+      <span className="inline-flex items-center gap-1 rounded-full bg-succes/10 px-2 py-0.5 text-xs font-semibold text-succes">
+        <CheckCircle2 className="h-3.5 w-3.5" /> Justifiée · {justification.motif}
+      </span>
+      {justification.pieces.length > 0 && (
+        <span className="inline-flex items-center gap-0.5 text-xs text-encre-2" title={pluriel(justification.pieces.length, 'pièce justificative', 'pièces justificatives')}>
+          <Paperclip className="h-3.5 w-3.5" aria-hidden /> {justification.pieces.length}
+        </span>
+      )}
     </span>
   ) : (
     <span className="inline-flex items-center gap-1 rounded-full bg-danger/10 px-2 py-0.5 text-xs font-semibold text-danger">
@@ -152,8 +166,9 @@ export function PastilleEtat({ justification }: { justification: JustificationVu
 type Tri = 'date' | 'eleve' | 'duree' | 'etat';
 
 /**
- * Absences et justifications : filtres sur une rangée, totaux cliquables, lignes regroupées par jour,
- * colonnes triables, export. Le SG justifie une ou plusieurs absences d'un même élève.
+ * Absences et justifications (une seule page) : filtres sur une rangée, totaux cliquables, export, et deux
+ * affichages : par jour (colonnes triables) ou par élève (un bloc par élève, « Tout cocher » et « Justifier »).
+ * Le SG justifie une ou plusieurs absences d'un même élève.
  */
 export default function Absences() {
   const { a, annee } = useApp();
@@ -171,6 +186,8 @@ export default function Absences() {
     tri: (params.get('tri') ?? 'date') as Tri,
     sens: params.get('sens') ?? (params.get('tri') && params.get('tri') !== 'date' ? 'asc' : 'desc'),
     page: Number(params.get('page') ?? 0),
+    // Affichage : vide = par jour, « eleve » = par élève.
+    vue: params.get('vue') === 'eleve' ? 'eleve' : '',
   };
   const filtrer = (changes: Partial<Record<keyof typeof f, string>>) => {
     const tout: Record<string, string> = { ...Object.fromEntries(Object.entries(f).map(([k, v]) => [k, String(v)])), page: '0', ...changes };
@@ -178,7 +195,7 @@ export default function Absences() {
     if (tout.tri === 'date') delete tout.tri;
     setParams(Object.fromEntries(Object.entries(tout).filter(([k, v]) => v && !(k === 'page' && v === '0'))));
   };
-  const reinitialiser = () => setParams({});
+  const reinitialiser = () => setParams(f.vue ? { vue: f.vue } : {});
   const [recherche, setRecherche] = useState(f.q);
   useEffect(() => setRecherche(f.q), [f.q]);
   useEffect(() => {
@@ -193,9 +210,19 @@ export default function Absences() {
   const matieres = useQuery({ queryKey: ['matieres', annee?.id, 'toutes'], queryFn: () => api<Matiere[]>('/matieres') });
   const nomsMatieres = useMemo(() => [...new Set((matieres.data ?? []).map((m) => m.nom))].sort((x, y) => x.localeCompare(y, 'fr')), [matieres.data]);
   const requete = new URLSearchParams(
-    Object.entries({ classeId: f.classe, eleveId: f.eleve, du: f.du, au: f.au, matiere: f.matiere, etat: f.etat, q: f.q, tri: f.tri, sens: f.sens }).filter(([, v]) => v !== ''),
+    Object.entries({
+      classeId: f.classe,
+      eleveId: f.eleve,
+      du: f.du,
+      au: f.au,
+      matiere: f.matiere,
+      etat: f.etat,
+      q: f.q,
+      tri: f.vue ? 'eleve' : f.tri,
+      sens: f.vue ? 'asc' : f.sens,
+    }).filter(([, v]) => v !== ''),
   ).toString();
-  const chemin = `/absences?${requete}&page=${f.page}&taille=${TAILLE}`;
+  const chemin = `/absences?${requete}&page=${f.page}&taille=${f.vue ? TAILLE_PAR_ELEVE : TAILLE}`;
   const q = useQuery({ queryKey: ['absences', annee?.id, chemin], queryFn: () => api<PageAbsences>(chemin) });
   const p = q.data;
   const filtreActif = Boolean(f.classe || f.eleve || f.du || f.au || f.matiere || f.etat || f.q);
@@ -233,6 +260,19 @@ export default function Absences() {
     return [...m.entries()].map(([d, ls]) => ({ cle: d, titre: d, lignes: ls }));
   }, [p, f.tri]);
 
+  // Hauteur de l'en-tête du tableau : le jour de chaque groupe se colle juste dessous.
+  const entete = useRef<HTMLTableSectionElement>(null);
+  const [hauteurEntete, setHauteurEntete] = useState(37);
+  useLayoutEffect(() => {
+    const t = entete.current;
+    if (!t) return;
+    const mesurer = () => setHauteurEntete(t.offsetHeight);
+    mesurer();
+    const o = new ResizeObserver(mesurer);
+    o.observe(t);
+    return () => o.disconnect();
+  });
+
   const triable = (code: Tri, libelle: string, droite = false) => {
     const actif = f.tri === code;
     const Icone = !actif ? ArrowUpDown : f.sens === 'asc' ? ArrowUp : ArrowDown;
@@ -269,10 +309,10 @@ export default function Absences() {
         </>
       }
     >
-      {/* Filtres sur une rangée : classe, matière, période, recherche ; l'état en pastilles. */}
-      <div className="space-y-2">
-        <div className="flex flex-wrap items-end gap-2">
-          <select className="champ w-auto min-w-[11rem]" value={f.classe} onChange={(e) => filtrer({ classe: e.target.value })} aria-label="Classe">
+      {/* Filtres, de haut en bas comme sur le mobile : classe et matière, état, raccourcis de période, dates, recherche. */}
+      <div className="space-y-2.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <select className="champ w-auto min-w-[12rem]" value={f.classe} onChange={(e) => filtrer({ classe: e.target.value })} aria-label="Classe">
             <option value="">Toutes les classes</option>
             {parNiveau(classes.data ?? []).map(([niveau, liste]) => (
               <optgroup key={niveau} label={`${niveau === 1 ? '1re' : `${niveau}e`} année`}>
@@ -284,7 +324,7 @@ export default function Absences() {
               </optgroup>
             ))}
           </select>
-          <select className="champ w-auto min-w-[11rem]" value={f.matiere} onChange={(e) => filtrer({ matiere: e.target.value })} aria-label="Matière">
+          <select className="champ w-auto min-w-[12rem]" value={f.matiere} onChange={(e) => filtrer({ matiere: e.target.value })} aria-label="Matière">
             <option value="">Toutes les matières</option>
             {nomsMatieres.map((m) => (
               <option key={m} value={m}>
@@ -292,13 +332,14 @@ export default function Absences() {
               </option>
             ))}
           </select>
-          <input type="date" className="champ w-auto" value={f.du} max={f.au || aujourdhui()} onChange={(e) => filtrer({ du: e.target.value })} aria-label="Du" title="Du" />
-          <span className="pb-2 text-sm text-encre-2">au</span>
-          <input type="date" className="champ w-auto" value={f.au} min={f.du || undefined} max={aujourdhui()} onChange={(e) => filtrer({ au: e.target.value })} aria-label="Au" title="Au" />
-          <div className="relative min-w-[14rem] flex-1">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-encre-3" />
-            <input className="champ pl-8" placeholder="Nom, prénom ou matricule" value={recherche} onChange={(e) => setRecherche(e.target.value)} aria-label="Recherche" />
-          </div>
+          {f.eleve && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-3 py-1 text-sm">
+              Élève : {nomEleve ? `${nomEleve.nom} ${nomEleve.prenoms}` : 'choisi'}
+              <button type="button" aria-label="Retirer ce filtre" className="text-encre-2 hover:text-encre" onClick={() => filtrer({ eleve: '' })}>
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </span>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {(
@@ -321,7 +362,13 @@ export default function Absences() {
               {libelle}
             </button>
           ))}
-          <span className="mx-1 h-5 w-px bg-bord" aria-hidden />
+          {filtreActif && (
+            <button type="button" className="ml-auto text-sm text-primaire hover:underline" onClick={reinitialiser}>
+              Réinitialiser les filtres
+            </button>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
           {periodes().map((x) => (
             <button
               key={x.code}
@@ -329,26 +376,23 @@ export default function Absences() {
               aria-pressed={periode === x.code}
               onClick={() => filtrer({ du: x.du, au: x.au })}
               className={clsx(
-                'rounded-full px-3 py-1 text-sm',
-                periode === x.code ? 'bg-primaire-pale font-semibold text-primaire' : 'text-encre-2 hover:bg-surface-2 hover:text-encre',
+                'rounded-full border px-3 py-1 text-sm',
+                periode === x.code ? 'border-primaire bg-primaire-pale font-semibold text-primaire' : 'border-bord bg-surface text-encre-2 hover:text-encre',
               )}
             >
               {x.libelle}
             </button>
           ))}
-          {f.eleve && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-3 py-1 text-sm">
-              Élève : {nomEleve ? `${nomEleve.nom} ${nomEleve.prenoms}` : 'choisi'}
-              <button type="button" aria-label="Retirer ce filtre" className="text-encre-2 hover:text-encre" onClick={() => filtrer({ eleve: '' })}>
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </span>
-          )}
-          {filtreActif && (
-            <button type="button" className="ml-auto text-sm text-primaire hover:underline" onClick={reinitialiser}>
-              Réinitialiser les filtres
-            </button>
-          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm text-encre-2">Du</span>
+          <input type="date" className="champ w-auto" value={f.du} max={f.au || aujourdhui()} onChange={(e) => filtrer({ du: e.target.value })} aria-label="Du" />
+          <span className="text-sm text-encre-2">au</span>
+          <input type="date" className="champ w-auto" value={f.au} min={f.du || undefined} max={aujourdhui()} onChange={(e) => filtrer({ au: e.target.value })} aria-label="Au" />
+        </div>
+        <div className="relative max-w-xl">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-encre-3" />
+          <input className="champ pl-8" placeholder="Nom, prénom ou matricule" value={recherche} onChange={(e) => setRecherche(e.target.value)} aria-label="Recherche" />
         </div>
       </div>
 
@@ -369,6 +413,38 @@ export default function Absences() {
               actif={f.etat === 'NON_JUSTIFIEE'}
               onClick={() => filtrer({ etat: 'NON_JUSTIFIEE' })}
             />
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span id="affichage" className="text-sm font-semibold text-encre-2">
+                Affichage
+              </span>
+              <div role="group" aria-labelledby="affichage" className="flex gap-1 rounded-lg bg-surface-2 p-1">
+                {(
+                  [
+                    ['', 'Par jour', CalendarDays],
+                    ['eleve', 'Par élève', Users],
+                  ] as const
+                ).map(([code, libelle, Icone]) => (
+                  <button
+                    key={code}
+                    type="button"
+                    aria-pressed={f.vue === code}
+                    onClick={() => filtrer({ vue: code })}
+                    className={clsx(
+                      'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold',
+                      f.vue === code ? 'bg-surface text-primaire shadow-sm' : 'text-encre-2 hover:text-encre',
+                    )}
+                  >
+                    <Icone className="h-4 w-4" aria-hidden /> {libelle}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <span className="text-sm text-encre-2">
+              {f.vue && sg ? "Cochez les absences d'un élève, puis « Justifier »." : "Cliquez sur une absence pour voir le détail et l'historique."}
+            </span>
           </div>
 
           {/* Barre d'actions : apparaît dès qu'une absence est cochée. */}
@@ -402,10 +478,21 @@ export default function Absences() {
                 )}
               </Vide>
             </Carte>
+          ) : f.vue ? (
+            <ParEleve
+              p={p}
+              sg={sg}
+              selection={selection}
+              choisir={setSelection}
+              basculer={basculer}
+              justifier={() => setJustifier(true)}
+              detail={setDetail}
+              page={(n) => filtrer({ page: String(n) })}
+            />
           ) : (
             <div className="max-h-[calc(100dvh-12rem)] min-h-[16rem] overflow-auto rounded-lg border border-bord bg-surface">
               <table className="tableau">
-                <thead>
+                <thead ref={entete}>
                   <tr>
                     {sg && (
                       <th className="w-10">
@@ -433,8 +520,9 @@ export default function Absences() {
                   <tbody key={g.cle}>
                     {g.titre && (
                       <tr>
-                        <td colSpan={sg ? 8 : 7} className="bg-surface-2 py-1.5 text-xs font-semibold text-encre-2">
-                          <span className="capitalize">{dateLongueIso(g.titre)}</span> · {pluriel(g.lignes.length, 'absence')}
+                        <td colSpan={sg ? 8 : 7} className="sticky bg-primaire-pale py-2 text-sm font-bold text-encre" style={{ top: hauteurEntete, zIndex: 1 }}>
+                          <span className="capitalize">{dateLongueIso(g.titre)}</span>
+                          <span className="font-normal text-encre-2"> · {pluriel(g.lignes.length, 'absence')}</span>
                         </td>
                       </tr>
                     )}
@@ -461,9 +549,11 @@ export default function Absences() {
                             <div className="font-medium">
                               {l.nom} <span className="font-normal text-encre-2">{l.prenoms}</span>
                             </div>
-                            <div className="text-xs text-encre-2">{l.classe}</div>
+                            <div className="text-xs text-encre-2">
+                              {l.classe} · <span className="whitespace-nowrap">n° {l.numero}</span>
+                            </div>
                           </td>
-                          <td className="whitespace-nowrap">{f.tri === 'date' ? <span className="text-encre-2">{dateCourte(l.date)}</span> : dateCourte(l.date)}</td>
+                          <td className="whitespace-nowrap">{dateCourte(l.date)}</td>
                           <td>
                             {l.matiere}
                             {l.enseignantAbsent && <div className="text-xs font-semibold text-alerte">Enseignant absent</div>}
@@ -516,6 +606,135 @@ export default function Absences() {
       {detail && <FenetreDetail id={detail} fermer={() => setDetail(null)} change={rafraichir} />}
       {voirMotifs && <FenetreMotifs fermer={() => setVoirMotifs(false)} />}
     </Page>
+  );
+}
+
+/** Vue par élève : un bloc par élève avec ses absences ; on coche, puis « Justifier ». */
+function ParEleve({
+  p,
+  sg,
+  selection,
+  choisir,
+  basculer,
+  justifier,
+  detail,
+  page,
+}: {
+  p: PageAbsences;
+  sg: boolean;
+  selection: Map<string, Ligne>;
+  choisir: (s: Map<string, Ligne>) => void;
+  basculer: (l: Ligne) => void;
+  justifier: () => void;
+  detail: (id: string) => void;
+  page: (n: number) => void;
+}) {
+  const eleveChoisi = selection.size ? [...selection.values()][0] : null;
+  const blocs = useMemo(() => {
+    const m = new Map<string, Ligne[]>();
+    for (const l of p.lignes) m.set(l.inscriptionId, [...(m.get(l.inscriptionId) ?? []), l]);
+    return [...m.values()];
+  }, [p]);
+  return (
+    <div className="space-y-3">
+      {blocs.map((ls) => {
+        const e = ls[0];
+        const nj = ls.filter((l) => !l.justification);
+        const minutesNj = nj.reduce((n, l) => n + l.duree, 0);
+        const autreEleve = Boolean(eleveChoisi) && eleveChoisi!.inscriptionId !== e.inscriptionId;
+        const choisies = nj.filter((l) => selection.has(l.id)).length;
+        const toutCoche = nj.length > 0 && choisies === nj.length;
+        return (
+          <section key={e.inscriptionId} aria-label={`${e.nom} ${e.prenoms}`} className="overflow-hidden rounded-lg border border-bord bg-surface">
+            <header className="flex flex-wrap items-center justify-between gap-2 border-b border-bord bg-surface-2 px-4 py-2.5">
+              <div className="flex flex-wrap items-baseline gap-x-3">
+                <span className="font-bold">
+                  {e.nom} <span className="font-normal text-encre-2">{e.prenoms}</span>
+                </span>
+                <span className="text-sm text-encre-2">
+                  {e.classe} · <span className="whitespace-nowrap">n° {e.numero}</span>
+                </span>
+              </div>
+              <span className={clsx('text-sm font-semibold', nj.length ? 'text-danger' : 'text-succes')}>
+                {nj.length ? `${duree(minutesNj)} non justifiées · ${pluriel(nj.length, 'absence')}` : 'Tout est justifié'}
+              </span>
+            </header>
+            <ul>
+              {ls.map((l) => (
+                <li
+                  key={l.id}
+                  onClick={() => detail(l.id)}
+                  className={clsx(
+                    'flex cursor-pointer flex-wrap items-center gap-x-4 gap-y-1 border-b border-bord/60 px-4 py-2.5 last:border-b-0 hover:bg-surface-2',
+                    selection.has(l.id) && 'bg-primaire-pale/60',
+                  )}
+                >
+                  {sg && (
+                    <span className="flex w-5 justify-center" onClick={(ev) => ev.stopPropagation()}>
+                      {!l.justification && (
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4"
+                          checked={selection.has(l.id)}
+                          disabled={autreEleve}
+                          title={autreEleve ? "Une justification couvre les absences d'un seul élève" : 'Choisir pour justifier'}
+                          onChange={() => basculer(l)}
+                          aria-label={`Choisir l'absence de ${l.nom} ${l.prenoms} en ${l.matiere}`}
+                        />
+                      )}
+                    </span>
+                  )}
+                  <span className="w-36 whitespace-nowrap text-sm">{dateCourte(l.date)}</span>
+                  <span className="min-w-[10rem] flex-1 text-sm">
+                    {l.matiere}
+                    {l.enseignantAbsent && <span className="block text-xs font-semibold text-alerte">Enseignant absent</span>}
+                  </span>
+                  <span className="w-28 whitespace-nowrap text-sm tabular-nums">
+                    {l.debut} – {l.fin}
+                  </span>
+                  <span className="w-16 whitespace-nowrap text-right text-sm tabular-nums">{duree(l.duree)}</span>
+                  <span className="w-64">
+                    <PastilleEtat justification={l.justification} />
+                  </span>
+                  <ChevronRight className="h-4 w-4 text-encre-3" aria-hidden />
+                </li>
+              ))}
+            </ul>
+            {sg && nj.length > 0 && (
+              <footer className="flex items-center justify-between gap-2 border-t border-bord px-4 py-2">
+                <button
+                  type="button"
+                  className="bouton-discret"
+                  disabled={autreEleve}
+                  title={autreEleve ? "Une justification couvre les absences d'un seul élève" : undefined}
+                  onClick={() => choisir(toutCoche ? new Map() : new Map(nj.map((l) => [l.id, l])))}
+                >
+                  {toutCoche ? 'Tout décocher' : 'Tout cocher'}
+                </button>
+                <button type="button" className="bouton-primaire" disabled={!choisies} onClick={justifier}>
+                  <ShieldCheck className="h-4 w-4" /> {choisies ? `Justifier ${pluriel(choisies, 'absence')}` : 'Justifier'}
+                </button>
+              </footer>
+            )}
+          </section>
+        );
+      })}
+      {p.total > p.lignes.length && (
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-encre-2">
+          <span>
+            Absences {p.page * p.taille + 1} à {p.page * p.taille + p.lignes.length} sur {p.total} : affinez les filtres (classe, période) pour tout voir d'un coup.
+          </span>
+          <div className="flex gap-1">
+            <button type="button" className="bouton-discret" disabled={p.page === 0} onClick={() => page(p.page - 1)}>
+              <ChevronLeft className="h-4 w-4" /> Précédentes
+            </button>
+            <button type="button" className="bouton-discret" disabled={(p.page + 1) * p.taille >= p.total} onClick={() => page(p.page + 1)}>
+              Suivantes <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -779,7 +998,9 @@ export function FenetreDetail({ id, fermer, change }: { id: string; fermer: () =
                         type="button"
                         className="bouton-discret text-danger"
                         disabled={retirer.isPending}
-                        onClick={() => confirm("Retirer cette justification ? L'absence redeviendra non justifiée.") && retirer.mutate(j.id)}
+                        onClick={async () => {
+                          if (await confirmer({ titre: 'Retirer la justification', message: "L'absence redeviendra non justifiée.", action: 'Retirer', danger: true })) retirer.mutate(j.id);
+                        }}
                       >
                         <Trash2 className="h-4 w-4" /> Retirer
                       </button>

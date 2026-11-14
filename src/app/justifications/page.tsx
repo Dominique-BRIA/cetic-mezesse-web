@@ -1,12 +1,6 @@
-'use client';
+import { redirect } from 'next/navigation';
 
-import Ecran from '@/ecrans/absences/Justifications';
-import { Garde, P, SG } from '@/components/Garde';
-
+// Les justifications se font maintenant sur la page Absences, affichage « Par élève » : les anciens liens y mènent.
 export default function Page() {
-  return (
-    <Garde roles={[P, SG]}>
-      <Ecran />
-    </Garde>
-  );
+  redirect('/absences?vue=eleve&etat=NON_JUSTIFIEE');
 }

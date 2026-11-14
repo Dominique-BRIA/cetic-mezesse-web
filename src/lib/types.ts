@@ -154,6 +154,8 @@ export interface Inscription {
   classe: { id: string; nom: string; niveau: number };
   annee: { id: string; libelle: string };
   renvois: Renvoi[];
+  /** Numéro d'ordre dans la classe (1, 2… dans l'ordre alphabétique). */
+  numero?: number;
 }
 
 export interface Enseignant extends Utilisateur {

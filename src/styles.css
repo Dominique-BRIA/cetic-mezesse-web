@@ -86,10 +86,12 @@ body {
   .tableau {
     @apply w-full border-collapse text-sm;
   }
-  .tableau th {
+  /* :where() garde la règle aussi faible qu'une classe : les classes posées sur une cellule (z-[2], text-right,
+     sticky left-0…) l'emportent, au lieu d'être ignorées. */
+  .tableau :where(th) {
     @apply sticky top-0 z-[1] border-b border-bord bg-surface-2 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-encre-2;
   }
-  .tableau td {
+  .tableau :where(td) {
     @apply border-b border-bord/70 px-3 py-2 align-middle;
   }
   .tableau tbody tr:hover td {

@@ -15,7 +15,7 @@ import { ListeManquantes, type Manquantes } from '../prof/Manquantes';
 interface Releve {
   classe: { id: string; nom: string; annee: string };
   matieres: { id: string; nom: string; coefficient: number; groupe: string; professeur: string | null; evaluee: boolean; moyenne: number | null }[];
-  eleves: { inscriptionId: string; eleveId: string; matricule: string; nom: string; prenoms: string; notes: (number | null)[]; moyenne: number | null; rang: Rang | null }[];
+  eleves: { inscriptionId: string; eleveId: string; matricule: string; nom: string; prenoms: string; notes: (number | null)[]; moyenne: number | null; rang: Rang | null; numero: number }[];
   profil: Profil;
 }
 
@@ -126,6 +126,9 @@ function TableReleve({ classeId, periode }: { classeId: string; periode: CodePer
               <tr key={e.inscriptionId}>
                 <td className="sticky left-0 bg-surface tabular-nums">{rang(e.rang)}</td>
                 <td className="sticky left-12 bg-surface">
+                  <span className="mr-1.5 tabular-nums text-encre-2" title="Numéro d'ordre dans la classe">
+                    {e.numero}.
+                  </span>
                   <Link href={`/eleves/${e.eleveId}`} className="lien">
                     {e.nom} {e.prenoms}
                   </Link>

@@ -12,6 +12,7 @@ import { date } from '../../lib/format';
 import type { Classe } from '../../lib/types';
 import { Carte, Chargement, Champ, Erreur, Modale, Page, Vide } from '../../components/ui';
 import { AjoutEleves } from './AjoutEleves';
+import { CelluleSanction, FenetreDecision, type BilanEleve } from '../absences/Bilan';
 import { PhotosEleves } from './PhotosEleves';
 
 export default function Eleves() {
@@ -19,12 +20,45 @@ export default function Eleves() {
   const [params, setParams] = useParametresUrl();
   const classeId = params.get('classe') ?? '';
   const [recherche, setRecherche] = useState('');
+  // Filtre par sanction (absences non justifiées de l'année).
+  const [sanction, setSanction] = useState('');
   const [creation, setCreation] = useState(false);
   const [import_, setImport] = useState(false);
   const [photos, setPhotos] = useState(false);
 
   const classes = useQuery(requetes.classes(annee?.id));
   const eleves = useQuery(requetes.eleves(annee?.id, classeId, recherche));
+  // Sanction de l'année de chaque élève (absences non justifiées) : on voit d'un coup d'œil qui est concerné,
+  // et le Directeur décide des exclusions d'ici.
+  const client = useQueryClient();
+  const sanctions = useQuery({
+    queryKey: ['absences-sanctions', annee?.id, classeId],
+    queryFn: () => api<BilanEleve[]>(`/absences/sanctions${classeId ? `?classeId=${classeId}` : ''}`),
+  });
+  const parInscription = new Map((sanctions.data ?? []).map((s) => [s.inscriptionId, s]));
+  const retenu = (id: string) => {
+    if (!sanction) return true;
+    const x = parInscription.get(id);
+    if (!x) return false;
+    if (sanction === 'AVEC') return Boolean(x.libelleSanction);
+    if (sanction === 'A_DECIDER') return x.palierExclusion && !x.decision;
+    return x.sanction === sanction;
+  };
+  const liste = (eleves.data ?? []).filter((i) => retenu(i.id));
+  const [aDecider, setADecider] = useState<BilanEleve | null>(null);
+  const rafraichirSanctions = () => {
+    client.invalidateQueries({ queryKey: ['absences-sanctions'] });
+    client.invalidateQueries({ queryKey: ['absences-bilan'] });
+    client.invalidateQueries({ queryKey: ['eleves'] });
+  };
+  const annulerDecision = useMutation({
+    mutationFn: (id: string) => api<{ message: string }>(`/absences/exclusions/${id}`, { methode: 'DELETE' }),
+    onSuccess: (r) => {
+      toast.success(r.message);
+      rafraichirSanctions();
+    },
+    onError: (e) => toast.error(e.message),
+  });
 
   const exporter = (format: 'pdf' | 'xlsx') =>
     telecharger(`/documents/liste?classeId=${classeId}&format=${format}`, { ouvrir: format === 'pdf' }).catch((e) => toast.error(e.message));
@@ -64,6 +98,16 @@ export default function Eleves() {
             ))}
           </select>
         </Champ>
+        <Champ libelle="Sanction" className="w-56">
+          <select className="champ" value={sanction} onChange={(e) => setSanction(e.target.value)}>
+            <option value="">Toutes</option>
+            <option value="AVEC">Avec une sanction</option>
+            <option value="AVERTISSEMENT">Avertissement conduite</option>
+            <option value="BLAME">Blâme conduite</option>
+            <option value="EXCLUSION">Exclusion</option>
+            <option value="A_DECIDER">Exclusion à décider</option>
+          </select>
+        </Champ>
         <Champ libelle="Rechercher" className="min-w-[14rem] flex-1">
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-encre-3" />
@@ -82,7 +126,7 @@ export default function Eleves() {
         )}
       </div>
 
-      <Carte sansMarge titre={eleves.data ? `${eleves.data.length} élève(s)` : 'Élèves'}>
+      <Carte sansMarge titre={eleves.data ? `${liste.length} élève${liste.length > 1 ? 's' : ''}${sanction ? ` sur ${eleves.data.length}` : ''}` : 'Élèves'}>
         {eleves.isLoading ? (
           <div className="px-4">
             <Chargement />
@@ -91,15 +135,16 @@ export default function Eleves() {
           <div className="p-4">
             <Erreur erreur={eleves.error} />
           </div>
-        ) : !eleves.data?.length ? (
-          <Vide titre={recherche ? 'Aucun élève ne correspond à la recherche' : 'Aucun élève inscrit'}>
-            {!recherche && 'Ajoutez les élèves un par un ou importez un fichier Excel.'}
+        ) : !liste.length ? (
+          <Vide titre={sanction ? 'Aucun élève avec cette sanction' : recherche ? 'Aucun élève ne correspond à la recherche' : 'Aucun élève inscrit'}>
+            {!recherche && !sanction && 'Ajoutez les élèves un par un ou importez un fichier Excel.'}
           </Vide>
         ) : (
           <div className="overflow-x-auto">
             <table className="tableau">
               <thead>
                 <tr>
+                  <th className="w-12 text-right" title="Numéro d'ordre dans la classe">N°</th>
                   <th>Matricule</th>
                   <th>Nom et prénoms</th>
                   <th>Sexe</th>
@@ -107,11 +152,13 @@ export default function Eleves() {
                   <th>Classe</th>
                   <th className="hidden lg:table-cell">Mat. national</th>
                   <th className="hidden sm:table-cell">Redoublant</th>
+                  <th>Sanction</th>
                 </tr>
               </thead>
               <tbody>
-                {eleves.data.map((i) => (
+                {liste.map((i) => (
                   <tr key={i.id}>
+                    <td className="text-right font-semibold tabular-nums">{i.numero ?? ''}</td>
                     <td className="tabular-nums text-encre-2">{i.eleve.matricule}</td>
                     <td>
                       <Link href={`/eleves/${i.eleve.id}`} className="lien">
@@ -123,6 +170,13 @@ export default function Eleves() {
                     <td>{i.classe.nom}</td>
                     <td className="hidden tabular-nums text-encre-2 lg:table-cell">{i.eleve.matriculeNational ?? '—'}</td>
                     <td className="hidden sm:table-cell">{i.redoublant ? 'Oui' : 'Non'}</td>
+                    <td className="min-w-[12rem]">
+                      {parInscription.get(i.id) ? (
+                        <CelluleSanction e={parInscription.get(i.id)!} decider={setADecider} annuler={(id) => annulerDecision.mutate(id)} enCours={annulerDecision.isPending} />
+                      ) : (
+                        <span className="text-encre-3">—</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -135,6 +189,16 @@ export default function Eleves() {
         <AjoutEleves fermer={() => setCreation(false)} classes={classes.data} classeParDefaut={classeId} />
       )}
       {import_ && classes.data && <ImportEleves fermer={() => setImport(false)} classes={classes.data} classeParDefaut={classeId} />}
+      {aDecider && (
+        <FenetreDecision
+          eleve={aDecider}
+          fermer={() => setADecider(null)}
+          fait={() => {
+            setADecider(null);
+            rafraichirSanctions();
+          }}
+        />
+      )}
       {photos && classes.data && <PhotosEleves fermer={() => setPhotos(false)} classes={classes.data} classeParDefaut={classeId} />}
     </Page>
   );

@@ -10,6 +10,7 @@ import { useApp } from '../../lib/contexte';
 import type { Enseignant } from '../../lib/types';
 import { Carte, Chargement, Champ, Erreur, Etat, Modale, Page, Vide } from '../../components/ui';
 import { type Carriere, carriereDe, ChampsCarriere, corpsCarriere } from '../../components/Carriere';
+import { confirmer } from '../../lib/confirmation';
 
 export default function Enseignants() {
   const { a, annee } = useApp();
@@ -122,10 +123,16 @@ export default function Enseignants() {
                           type="button"
                           className="bouton-discret"
                           title="Réinitialiser le mot de passe"
-                          onClick={() =>
-                            confirm(`Réinitialiser le mot de passe de ${p.prenom} ${p.nom} ? Il deviendra « password ».`) &&
-                            reinitialiser.mutate(p)
-                          }
+                          onClick={async () => {
+                            if (
+                              await confirmer({
+                                titre: 'Réinitialiser le mot de passe',
+                                message: `Le mot de passe de ${p.prenom} ${p.nom} deviendra « password ».`,
+                                action: 'Réinitialiser',
+                              })
+                            )
+                              reinitialiser.mutate(p);
+                          }}
                         >
                           <KeyRound className="h-4 w-4" />
                         </button>

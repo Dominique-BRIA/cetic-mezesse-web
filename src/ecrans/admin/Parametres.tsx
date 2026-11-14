@@ -60,42 +60,28 @@ function SeuilTableauHonneur() {
   );
 }
 
-const LIGNES: [LigneBulletin, string][] = [
-  ['AVERTISSEMENT', 'Avertissement'],
-  ['BLAME', 'Blâme'],
-  ['EXCLUSION', 'Exclusion (Proviseur)'],
-  ['AUCUNE', 'Aucune ligne'],
+// Les trois sanctions pour absences non justifiées, dans l'ordre ; le SG règle seulement les heures.
+const PALIERS: [Exclude<LigneBulletin, 'AUCUNE'>, string][] = [
+  ['AVERTISSEMENT', 'Avertissement conduite'],
+  ['BLAME', 'Blâme conduite'],
+  ['EXCLUSION', 'Exclusion'],
 ];
 
-/** Ligne du bulletin devinée d'après le nom (le SG peut la changer). */
-function devinerLigne(nom: string): LigneBulletin {
-  const n = nom.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  if (n.includes('exclu') || n.includes('renvoi') || n.includes('conseil de discipline')) return 'EXCLUSION';
-  if (n.includes('blame')) return 'BLAME';
-  if (n.includes('avertissement')) return 'AVERTISSEMENT';
-  return 'AUCUNE';
-}
-
-/** Sanctions pour absences non justifiées : le SG les remplit comme les cotes, chacune à partir d'un nombre d'heures. */
+/** Sanctions pour absences non justifiées : trois paliers fixes, le SG indique à partir de combien d'heures. */
 function Sanctions({ modifiable }: { modifiable: boolean }) {
   const client = useQueryClient();
   const q = useQuery({ queryKey: ['sanctions-absences'], queryFn: () => api<SanctionAbsence[]>('/sanctions-absences', { annee: false }) });
-  type Ligne = { libelle: string; ligne: LigneBulletin; heures: string; devinee: boolean };
-  const [lignes, setLignes] = useState<Ligne[]>([]);
+  const [heures, setHeures] = useState<Record<string, string>>({});
   useEffect(() => {
     if (q.data)
-      setLignes(
-        [...q.data]
-          .sort((a, b) => a.minutes - b.minutes)
-          .map((s) => ({ libelle: s.libelle, ligne: s.ligne, heures: String(Math.round((s.minutes / 60) * 100) / 100).replace('.', ','), devinee: false })),
-      );
+      setHeures(Object.fromEntries(q.data.map((s) => [s.ligne, String(Math.round((s.minutes / 60) * 100) / 100).replace('.', ',')])));
   }, [q.data]);
   const envoi = useMutation({
     mutationFn: () =>
       api('/sanctions-absences', {
         methode: 'PUT',
         annee: false,
-        corps: lignes.map((l) => ({ libelle: l.libelle, ligne: l.ligne, heures: Number(l.heures.replace(',', '.')) })),
+        corps: PALIERS.map(([ligne]) => ({ ligne, heures: heures[ligne]?.trim() ? Number(heures[ligne].replace(',', '.')) : null })),
       }),
     onSuccess: () => {
       toast.success('Sanctions enregistrées.');
@@ -103,7 +89,6 @@ function Sanctions({ modifiable }: { modifiable: boolean }) {
       client.invalidateQueries({ queryKey: ['absences-bilan'] });
     },
   });
-  const maj = (i: number, l: Partial<Ligne>) => setLignes(lignes.map((x, k) => (k === i ? { ...x, ...l } : x)));
 
   return (
     <Carte
@@ -118,8 +103,8 @@ function Sanctions({ modifiable }: { modifiable: boolean }) {
       }
     >
       <p className="mb-3 max-w-3xl text-sm text-encre-2">
-        Heures non justifiées cumulées depuis la rentrée. Chaque sanction s'applique à partir de son nombre d'heures (inclus) ; le bulletin porte la plus élevée
-        atteinte. Une exclusion est décidée par le Proviseur, qui est prévenu.
+        Heures non justifiées cumulées depuis la rentrée. Le bulletin porte la sanction la plus élevée atteinte. À l'exclusion, le Directeur est prévenu et
+        décide : exclusion définitive, exclusion temporaire ou sursis. Laissez une case vide pour ne pas utiliser la sanction.
       </p>
       {envoi.error ? (
         <div className="mb-3">
@@ -127,66 +112,33 @@ function Sanctions({ modifiable }: { modifiable: boolean }) {
         </div>
       ) : null}
       <fieldset disabled={!modifiable}>
-        {lignes.length > 0 && (
-          <table className="tableau">
-            <thead>
-              <tr>
-                <th>Sanction</th>
-                <th className="w-56">Sur le bulletin</th>
-                <th className="w-36 text-right">À partir de</th>
-                <th className="w-10" />
-              </tr>
-            </thead>
-            <tbody>
-              {lignes.map((l, i) => (
-                <tr key={i}>
-                  <td>
+        <table className="tableau max-w-xl">
+          <thead>
+            <tr>
+              <th>Sanction</th>
+              <th className="w-40 text-right">À partir de</th>
+            </tr>
+          </thead>
+          <tbody>
+            {PALIERS.map(([ligne, libelle]) => (
+              <tr key={ligne}>
+                <td className="font-semibold">{libelle}</td>
+                <td>
+                  <div className="flex items-center gap-2">
                     <input
-                      className="champ py-1.5 font-semibold"
-                      value={l.libelle}
-                      maxLength={60}
-                      placeholder="Ex. : Avertissement"
-                      aria-label="Sanction"
-                      onChange={(e) => maj(i, { libelle: e.target.value, ...(l.devinee ? { ligne: devinerLigne(e.target.value) } : {}) })}
+                      className="champ py-1.5 text-right tabular-nums"
+                      inputMode="decimal"
+                      value={heures[ligne] ?? ''}
+                      onChange={(e) => setHeures({ ...heures, [ligne]: e.target.value })}
+                      aria-label={`${libelle} à partir de (heures)`}
                     />
-                  </td>
-                  <td>
-                    <select className="champ py-1.5" value={l.ligne} aria-label="Sur le bulletin" onChange={(e) => maj(i, { ligne: e.target.value as LigneBulletin, devinee: false })}>
-                      {LIGNES.map(([v, t]) => (
-                        <option key={v} value={v}>
-                          {t}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td>
-                    <div className="flex items-center gap-2">
-                      <input
-                        className="champ py-1.5 text-right tabular-nums"
-                        inputMode="decimal"
-                        value={l.heures}
-                        aria-label="À partir de (heures)"
-                        onChange={(e) => maj(i, { heures: e.target.value })}
-                      />
-                      <span className="text-sm text-encre-2">h</span>
-                    </div>
-                  </td>
-                  <td>
-                    <button type="button" className="bouton-discret hover:text-danger" aria-label="Retirer" onClick={() => setLignes(lignes.filter((_, k) => k !== i))}>
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-        {lignes.length === 0 && !q.isLoading && <p className="text-sm text-encre-2">Aucune sanction réglée : le bulletin ne porte aucune sanction pour absences.</p>}
-        {modifiable && (
-          <button type="button" className="bouton-discret mt-2" onClick={() => setLignes([...lignes, { libelle: '', ligne: 'AUCUNE', heures: '', devinee: true }])}>
-            <Plus className="h-4 w-4" /> Ajouter une sanction
-          </button>
-        )}
+                    <span className="text-sm text-encre-2">h</span>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </fieldset>
     </Carte>
   );

@@ -1,9 +1,9 @@
 import Link from 'next/link';
-import clsx from 'clsx';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../lib/api';
 import { useApp } from '../../lib/contexte';
 import { useParametresUrl } from '../../lib/navigation';
+import { requetes } from '../../lib/requetes';
 import { duree } from '../../lib/format';
 import { Carte, Chargement, Champ, Erreur, Page, Vide } from '../../components/ui';
 import { aujourdhui } from './Appel';
@@ -46,8 +46,13 @@ export default function EnseignantsAbsents() {
   const chemin = `/absences/enseignants?${new URLSearchParams(Object.entries({ du, au, enseignantId: ens }).filter(([, v]) => v)).toString()}`;
   const q = useQuery({ queryKey: ['absences-enseignants', annee?.id, chemin], queryFn: () => api<{ totaux: Total[]; seances: SeanceNonAssuree[] }>(chemin) });
   const d = q.data;
-  const total = (d?.totaux ?? []).reduce((n, t) => n + t.minutes, 0);
-  const choisi = d?.totaux.find((t) => t.id === ens);
+  // Avec un enseignant choisi, seulement son total.
+  const totaux = (d?.totaux ?? []).filter((t) => !ens || t.id === ens);
+  const total = totaux.reduce((n, t) => n + t.minutes, 0);
+  // Tous les enseignants, pour le filtre (pas seulement ceux qui ont des séances non assurées).
+  const enseignants = useQuery(requetes.enseignants(annee?.id));
+  const tries = [...(enseignants.data ?? [])].sort((a, b) => `${a.nom} ${a.prenom}`.localeCompare(`${b.nom} ${b.prenom}`, 'fr'));
+  const choisi = (enseignants.data ?? []).find((t) => t.id === ens);
 
   return (
     <Page
@@ -61,35 +66,43 @@ export default function EnseignantsAbsents() {
         <Champ libelle="Au">
           <input type="date" className="champ" value={au} min={du || undefined} max={aujourdhui()} onChange={(e) => aller({ au: e.target.value })} />
         </Champ>
+        <Champ libelle="Enseignant" className="w-full max-w-xs">
+          <select className="champ" value={ens} onChange={(e) => aller({ enseignant: e.target.value })}>
+            <option value="">Tous les enseignants</option>
+            {tries.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.nom} {t.prenom}
+              </option>
+            ))}
+          </select>
+        </Champ>
       </div>
 
       {q.isLoading ? (
         <Chargement />
       ) : q.error ? (
         <Erreur erreur={q.error} />
-      ) : !d ? null : d.totaux.length === 0 ? (
+      ) : !d ? null : totaux.length === 0 ? (
         <Carte>
-          <Vide titre="Aucune séance non assurée">Aucun enseignant n'a été marqué absent sur les feuilles d'appel de cette période.</Vide>
+          <Vide titre="Aucune séance non assurée">
+            {choisi
+              ? `${choisi.prenom} ${choisi.nom} n'a été marqué absent sur aucune feuille d'appel de cette période.`
+              : "Aucun enseignant n'a été marqué absent sur les feuilles d'appel de cette période."}
+          </Vide>
         </Carte>
       ) : (
         <div className="grid gap-4 lg:grid-cols-[22rem_1fr]">
           <Carte titre={`Par enseignant · ${duree(total)} au total`} sansMarge>
             <ul className="divide-y divide-bord">
-              {d.totaux.map((t) => (
-                <li key={t.id ?? 'aucun'}>
-                  <button
-                    type="button"
-                    onClick={() => aller({ enseignant: t.id === ens ? '' : (t.id ?? '') })}
-                    className={clsx('flex w-full items-baseline gap-2 px-4 py-2.5 text-left text-sm hover:bg-primaire-pale/40', t.id === ens && 'bg-primaire-pale/70')}
-                  >
-                    <span className="flex-1">
-                      <span className="font-medium">{t.nom}</span> <span className="text-encre-2">{t.prenom}</span>
-                    </span>
-                    <span className="text-xs text-encre-2">
-                      {t.seances} séance{t.seances > 1 ? 's' : ''}
-                    </span>
-                    <span className="w-16 whitespace-nowrap text-right font-semibold tabular-nums text-danger">{duree(t.minutes)}</span>
-                  </button>
+              {totaux.map((t) => (
+                <li key={t.id ?? 'aucun'} className="flex items-baseline gap-2 px-4 py-2.5 text-sm">
+                  <span className="flex-1">
+                    <span className="font-medium">{t.nom}</span> <span className="text-encre-2">{t.prenom}</span>
+                  </span>
+                  <span className="text-xs text-encre-2">
+                    {t.seances} séance{t.seances > 1 ? 's' : ''}
+                  </span>
+                  <span className="w-16 whitespace-nowrap text-right font-semibold tabular-nums text-danger">{duree(t.minutes)}</span>
                 </li>
               ))}
             </ul>

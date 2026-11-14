@@ -7,6 +7,7 @@ import { requetes } from '../../lib/requetes';
 import { useApp } from '../../lib/contexte';
 import type { Classe, Groupe } from '../../lib/types';
 import { Carte, Chargement, Champ, Erreur, Modale, Page, Vide } from '../../components/ui';
+import { confirmer } from '../../lib/confirmation';
 
 export default function Groupes() {
   const { a, annee } = useApp();
@@ -77,7 +78,9 @@ export default function Groupes() {
                           type="button"
                           className="bouton-discret hover:text-danger"
                           aria-label="Supprimer"
-                          onClick={() => confirm(`Supprimer le groupe « ${g.nom} » ?`) && suppression.mutate(g)}
+                          onClick={async () => {
+                            if (await confirmer({ titre: 'Supprimer le groupe', message: `Le groupe « ${g.nom} » sera supprimé.`, action: 'Supprimer', danger: true })) suppression.mutate(g);
+                          }}
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>

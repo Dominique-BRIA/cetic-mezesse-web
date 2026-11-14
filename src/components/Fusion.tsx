@@ -198,7 +198,7 @@ function Contenu({ type, ids, inverser, fermer }: { type: TypeFusion; ids: [stri
               </li>
             ))}
             <li className="px-1 text-xs text-encre-3">
-              La fiche absorbée n'est pas effacée. Si la fusion était une erreur, le Proviseur peut la défaire en désapprouvant la décision.
+              La fiche absorbée n'est pas effacée. Si la fusion était une erreur, le Directeur peut la défaire en désapprouvant la décision.
             </li>
           </ul>
         </div>

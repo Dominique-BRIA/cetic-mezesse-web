@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import clsx from 'clsx';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -10,6 +10,7 @@ import { useParametresUrl } from '../../lib/navigation';
 import { duree } from '../../lib/format';
 import type { Classe, Matiere } from '../../lib/types';
 import { Carte, Chargement, Champ, Erreur, Modale, Page, Vide } from '../../components/ui';
+import { confirmer } from '../../lib/confirmation';
 
 interface Personne {
   id: string;
@@ -40,6 +41,8 @@ interface EleveAppel {
   prenoms: string;
   matricule: string;
   renvoye: boolean;
+  /** Numéro d'ordre dans la classe (1, 2… dans l'ordre alphabétique). */
+  numero: number;
 }
 
 interface Vue {
@@ -72,6 +75,58 @@ const JOURS = ['', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 
 export function aujourdhui() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** Samedi ou dimanche : pas de cours. */
+const weekEnd = (iso: string) => [0, 6].includes(new Date(`${iso}T12:00:00`).getDay());
+
+/** Jour de cours le plus proche en partant de `iso` dans le sens `pas` (-1 ou +1), week-ends sautés. */
+function jourDeCours(iso: string, pas: number) {
+  const d = new Date(`${iso}T12:00:00`);
+  while ([0, 6].includes(d.getDay())) d.setDate(d.getDate() + pas);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Flèches au bord du tableau quand des séances sont cachées à droite (ou à gauche) : elles signalent qu'il faut
+ * faire défiler, et un clic le fait.
+ */
+function FlechesDefilement({ cadre }: { cadre: RefObject<HTMLDivElement | null> }) {
+  const [cote, setCote] = useState({ gauche: false, droite: false });
+  useEffect(() => {
+    const e = cadre.current;
+    if (!e) return;
+    const maj = () => setCote({ gauche: e.scrollLeft > 4, droite: e.scrollLeft + e.clientWidth < e.scrollWidth - 4 });
+    maj();
+    e.addEventListener('scroll', maj, { passive: true });
+    const o = new ResizeObserver(maj);
+    o.observe(e);
+    if (e.firstElementChild) o.observe(e.firstElementChild);
+    return () => {
+      e.removeEventListener('scroll', maj);
+      o.disconnect();
+    };
+  });
+  const aller = (sens: number) => {
+    const e = cadre.current;
+    if (e) e.scrollBy({ left: sens * Math.max(220, e.clientWidth * 0.6), behavior: 'smooth' });
+  };
+  // À hauteur de l'en-tête des séances : visible dès que le tableau apparaît.
+  const bouton = 'absolute top-12 z-[6] flex h-7 w-7 items-center justify-center rounded-full bg-primaire text-white shadow-feuille hover:bg-primaire/90 dark:text-[rgb(12_24_38)]';
+  return (
+    <>
+      {cote.gauche && (
+        <button type="button" className={clsx(bouton, 'left-[14.75rem]')} onClick={() => aller(-1)} aria-label="Voir les séances à gauche" title="Séances à gauche">
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+      )}
+      {cote.droite && (
+        <button type="button" className={clsx(bouton, 'right-[5.75rem]')} onClick={() => aller(1)} aria-label="Voir les autres séances, à droite" title="Autres séances à droite">
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      )}
+    </>
+  );
 }
 
 const dateLongue = (iso: string, jour: number) => {
@@ -134,7 +189,9 @@ export default function Appel() {
   const [params, setParams] = useParametresUrl();
   const classes = useQuery(requetes.classes(annee?.id));
   const classeId = params.get('classe') ?? parNiveau(classes.data ?? [])[0]?.[1][0]?.id ?? '';
-  const date = params.get('date') ?? aujourdhui();
+  // Le week-end, la feuille s'ouvre sur le dernier vendredi.
+  const dernierJour = jourDeCours(aujourdhui(), -1);
+  const date = params.get('date') ?? dernierJour;
   const sg = a('SURVEILLANT_GENERAL');
   const q = useQuery({
     queryKey: ['appel', classeId, date],
@@ -247,7 +304,14 @@ export default function Appel() {
       setSeanceEditee(s);
       return;
     }
-    if (!confirm("Pour modifier une séance, l'appel doit d'abord être enregistré, avec les absences déjà cochées. L'enregistrer maintenant ?")) return;
+    if (
+      !(await confirmer({
+        titre: "Enregistrer l'appel d'abord",
+        message: "Pour modifier une séance, l'appel doit d'abord être enregistré, avec les absences déjà cochées.",
+        action: "Enregistrer l'appel",
+      }))
+    )
+      return;
     try {
       const vue = await enregistrerAppel.mutateAsync();
       setSeanceEditee(s === 'nouvelle' ? 'nouvelle' : (vue.seances.find((x) => x.creneauId === s.creneauId) ?? null));
@@ -256,7 +320,58 @@ export default function Appel() {
     }
   };
 
+  // Clic sur l'en-tête d'une séance : l'enseignant prévu est marqué absent, ou de nouveau présent.
+  const basculerEnseignant = async (s: Seance) => {
+    if (s.statut === 'ANNULEE') {
+      toast.info('Séance annulée : passez par « Modifier la séance… » pour la rétablir.');
+      return;
+    }
+    if (s.remplacant) {
+      toast.info(`Remplacé par ${nomPersonne(s.remplacant)} : la séance a été assurée. Pour changer, passez par « Modifier la séance… ».`);
+      return;
+    }
+    const qui = nomPersonne(s.enseignant) || "L'enseignant";
+    const absent = !s.enseignantAbsent;
+    const oui = await confirmer({
+      titre: absent ? 'Enseignant absent' : 'Enseignant de nouveau présent',
+      message: (
+        <>
+          <p>
+            <strong>{qui}</strong> · {s.matiere}, {s.debut} – {s.fin}
+          </p>
+          <p className="mt-1 text-encre-2">
+            {absent ? 'La séance comptera comme non assurée. Les élèves absents restent comptés absents.' : 'La séance redevient assurée.'}
+          </p>
+        </>
+      ),
+      note: v?.fiche ? undefined : "L'appel sera d'abord enregistré, avec les absences déjà cochées.",
+      action: absent ? 'Marquer absent' : 'Remettre présent',
+    });
+    if (!oui) return;
+    let seance: Seance | undefined = s;
+    if (!v?.fiche) {
+      try {
+        const vue = await enregistrerAppel.mutateAsync();
+        seance = vue.seances.find((x) => x.creneauId === s.creneauId);
+      } catch {
+        return; // message déjà affiché
+      }
+    }
+    if (!seance?.id) return;
+    try {
+      const vue = await api<Vue>(`/appel/seances/${seance.id}`, {
+        methode: 'PUT',
+        corps: { debut: seance.debut, fin: seance.fin, remplacantId: null, enseignantAbsent: absent, annulee: false, motif: seance.motif ?? null },
+      });
+      mettreAJour(vue);
+      toast.success(absent ? `${qui} marqué absent.` : `${qui} de nouveau présent.`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+
   const actives = (v?.seances ?? []).filter((s) => s.statut !== 'ANNULEE');
+  const cadreTableau = useRef<HTMLDivElement>(null);
   const basculer = (k: string) =>
     setCases((c) => {
       const n = new Set(c);
@@ -289,16 +404,37 @@ export default function Appel() {
     : cases.size;
   const elevesVus = (v?.eleves ?? []).filter(
     (e) =>
-      (!recherche || sansAccents(`${e.nom} ${e.prenoms} ${e.matricule}`).includes(sansAccents(recherche))) && (!seulementAbsents || minutesAbsent(e) > 0),
+      (!recherche || String(e.numero) === recherche.trim() || sansAccents(`${e.nom} ${e.prenoms} ${e.matricule}`).includes(sansAccents(recherche))) &&
+      (!seulementAbsents || minutesAbsent(e) > 0),
   );
   // Une absence justifiée qu'on décoche perd sa justification à l'enregistrement : on demande d'abord.
-  const basculerCase = (k: string) => {
-    if (justifiees.has(k) && cases.has(k) && !confirm("Cette absence est justifiée : la retirer supprimera aussi sa justification à l'enregistrement. Continuer ?")) return;
+  const basculerCase = async (k: string) => {
+    if (
+      justifiees.has(k) &&
+      cases.has(k) &&
+      !(await confirmer({
+        titre: 'Absence justifiée',
+        message: "La retirer supprimera aussi sa justification à l'enregistrement.",
+        action: "Retirer l'absence",
+        danger: true,
+      }))
+    )
+      return;
     basculer(k);
   };
-  const toutLaSeance = (s: Seance, absents: boolean) => {
+  const toutLaSeance = async (s: Seance, absents: boolean) => {
     const cibles = (v?.eleves ?? []).filter((e) => !e.renvoye).map((e) => cle(colonne(s), e.inscriptionId));
-    if (!absents && cibles.some((k) => justifiees.has(k) && cases.has(k)) && !confirm('Des absences justifiées seront retirées avec leur justification à l\'enregistrement. Continuer ?')) return;
+    if (
+      !absents &&
+      cibles.some((k) => justifiees.has(k) && cases.has(k)) &&
+      !(await confirmer({
+        titre: 'Absences justifiées',
+        message: "Des absences justifiées seront retirées, avec leur justification, à l'enregistrement.",
+        action: 'Tous présents',
+        danger: true,
+      }))
+    )
+      return;
     setCases((c) => {
       const n = new Set(c);
       for (const k of cibles) {
@@ -328,10 +464,14 @@ export default function Appel() {
       }
     }
   };
-  const decaler = (jours: number) => {
+  // Jour de cours précédent ou suivant : le week-end est sauté (vendredi ↔ lundi).
+  const voisin = (pas: number) => {
     const d = new Date(`${date}T12:00:00`);
-    d.setDate(d.getDate() + jours);
-    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    d.setDate(d.getDate() + pas);
+    return jourDeCours(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`, pas);
+  };
+  const decaler = (pas: number) => {
+    const iso = voisin(pas);
     if (iso <= aujourdhui()) aller(classeId, iso);
   };
   const heure = (iso: string) => new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
@@ -357,32 +497,36 @@ export default function Appel() {
             ))}
           </select>
         </Champ>
-        <Champ libelle="Date">
+        {/* Pas de <label> ici : il se lierait au bouton « Hier » (un clic sur « Date » reculerait d'un jour). */}
+        <div role="group" aria-labelledby="date-appel">
+          <span id="date-appel" className="etiquette">
+            Date
+          </span>
           <div className="flex items-center gap-1">
-            <button type="button" className="bouton-secondaire px-2.5" onClick={() => decaler(-1)} title="Jour précédent">
+            <button type="button" className="bouton-secondaire px-2.5" onClick={() => decaler(-1)} title="Jour de cours précédent">
               <ChevronLeft className="h-4 w-4" /> Hier
             </button>
-            <input type="date" className="champ w-auto" value={date} max={aujourdhui()} onChange={(e) => e.target.value && aller(classeId, e.target.value)} />
-            <button type="button" className="bouton-secondaire px-2.5" onClick={() => decaler(1)} disabled={date >= aujourdhui()} title="Jour suivant">
+            <input type="date" aria-label="Date de l'appel" className="champ w-auto" value={date} max={aujourdhui()} onChange={(e) => e.target.value && aller(classeId, e.target.value)} />
+            <button type="button" className="bouton-secondaire px-2.5" onClick={() => decaler(1)} disabled={voisin(1) > aujourdhui()} title="Jour de cours suivant">
               Demain <ChevronRight className="h-4 w-4" />
             </button>
           </div>
-        </Champ>
-        <button type="button" className="bouton-secondaire" onClick={() => aller(classeId, aujourdhui())} disabled={date === aujourdhui()}>
+        </div>
+        <button type="button" className="bouton-secondaire" onClick={() => aller(classeId, dernierJour)} disabled={date === dernierJour}>
           <CalendarCheck className="h-4 w-4" /> Aujourd'hui
         </button>
         {v && <span className="pb-2 text-sm font-semibold capitalize text-encre-2">{dateLongue(v.date, v.jour)}</span>}
       </div>
 
-      <EtatDuJour date={date} classeId={classeId} choisir={(c) => aller(c, date)} />
+      {!weekEnd(date) && <EtatDuJour date={date} classeId={classeId} choisir={(c) => aller(c, date)} />}
 
       {q.isLoading ? (
         <Chargement />
       ) : q.error ? (
         <Erreur erreur={q.error} />
-      ) : !v ? null : v.jour === 7 ? (
+      ) : !v ? null : v.jour >= 6 ? (
         <Carte>
-          <Vide titre="Dimanche">Il n'y a pas cours le dimanche.</Vide>
+          <Vide titre="Week-end">Les cours ont lieu du lundi au vendredi : pas d'appel le samedi ni le dimanche.</Vide>
         </Carte>
       ) : (
         <>
@@ -461,7 +605,18 @@ export default function Appel() {
                       type="button"
                       className="bouton-primaire"
                       disabled={envoi}
-                      onClick={() => confirm(`Enregistrer l'appel ? ${totalAbsents} élève(s) absent(s), les autres présents.`) && enregistrerAppel.mutate()}
+                      onClick={async () => {
+                        if (
+                          await confirmer({
+                            titre: "Enregistrer l'appel",
+                            message: totalAbsents
+                              ? `${totalAbsents} élève${totalAbsents > 1 ? 's' : ''} absent${totalAbsents > 1 ? 's' : ''}, les autres présents.`
+                              : 'Aucun absent : tous les élèves sont présents.',
+                            action: 'Enregistrer',
+                          })
+                        )
+                          enregistrerAppel.mutate();
+                      }}
                     >
                       {envoi ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                       Enregistrer l'appel
@@ -509,7 +664,9 @@ export default function Appel() {
               </div>
 
               {/* Le tableau défile dans son cadre : l'en-tête reste en haut, les noms à gauche, le total à droite. */}
-              <div className="max-h-[calc(100dvh-14rem)] min-h-[18rem] overflow-auto rounded-lg border border-bord bg-surface">
+              <div className="relative">
+              <FlechesDefilement cadre={cadreTableau} />
+              <div ref={cadreTableau} className="max-h-[calc(100dvh-14rem)] min-h-[18rem] overflow-auto rounded-lg border border-bord bg-surface">
                 <table className="w-full border-separate border-spacing-0 text-sm" onKeyDown={naviguer}>
                   <thead>
                     <tr>
@@ -528,13 +685,30 @@ export default function Appel() {
                             )}
                           >
                             <div className="flex items-start gap-1">
-                              <div className="min-w-0 flex-1">
-                                <div className={clsx('font-bold leading-tight', annulee && 'line-through')}>{s.matiere}</div>
-                                <div className="whitespace-nowrap text-xs tabular-nums text-encre-2">
-                                  {s.debut} – {s.fin} · {duree(s.duree)}
-                                </div>
-                                <div className="truncate text-xs text-encre-2">{s.remplacant ? `Remplacé par ${nomPersonne(s.remplacant)}` : nomPersonne(s.enseignant)}</div>
-                              </div>
+                              {/* Le SG marque l'enseignant absent (ou présent) d'un clic sur la matière ou l'enseignant. */}
+                              {(() => {
+                                const contenu = (
+                                  <>
+                                    <span className={clsx('block font-bold leading-tight', annulee && 'line-through')}>{s.matiere}</span>
+                                    <span className="block whitespace-nowrap text-xs tabular-nums text-encre-2">
+                                      {s.debut} – {s.fin} · {duree(s.duree)}
+                                    </span>
+                                    <span className="block truncate text-xs text-encre-2">{s.remplacant ? `Remplacé par ${nomPersonne(s.remplacant)}` : nomPersonne(s.enseignant)}</span>
+                                  </>
+                                );
+                                return sg ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => basculerEnseignant(s)}
+                                    title={s.enseignantAbsent ? 'Enseignant absent : cliquer pour le remettre présent' : "Cliquer pour marquer l'enseignant absent"}
+                                    className="-m-1 min-w-0 flex-1 rounded p-1 text-left hover:bg-primaire/10"
+                                  >
+                                    {contenu}
+                                  </button>
+                                ) : (
+                                  <div className="min-w-0 flex-1">{contenu}</div>
+                                );
+                              })()}
                               {sg && <MenuSeance annulee={annulee} toutAbsent={() => toutLaSeance(s, true)} toutPresent={() => toutLaSeance(s, false)} modifier={() => editerSeance(s)} />}
                             </div>
                             {annulee ? (
@@ -577,6 +751,7 @@ export default function Appel() {
                               className="w-full cursor-pointer text-left disabled:cursor-default"
                               title={editable && !e.renvoye ? 'Absent toute la journée (ou de nouveau présent partout)' : undefined}
                             >
+                              <span className="mr-2 inline-block w-6 text-right font-semibold tabular-nums text-encre-2">{e.numero}</span>
                               <span className="font-medium">{e.nom}</span> <span className="text-encre-2">{e.prenoms}</span>
                               {e.renvoye && <span className="ml-2 text-xs font-semibold text-encre-2">Renvoyé(e)</span>}
                             </button>
@@ -638,6 +813,7 @@ export default function Appel() {
                     })}
                   </tbody>
                 </table>
+              </div>
               </div>
             </>
           )}
@@ -740,9 +916,20 @@ function FormSeance({
       <form
         id="form-seance"
         className="grid gap-3 sm:grid-cols-2"
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault();
-          if (f.annulee && !seance?.statut.includes('ANNULEE') && absents > 0 && !confirm(`Annuler la séance efface ses ${absents} absence(s). Continuer ?`)) return;
+          if (
+            f.annulee &&
+            !seance?.statut.includes('ANNULEE') &&
+            absents > 0 &&
+            !(await confirmer({
+              titre: 'Annuler la séance',
+              message: `Ses ${absents} absence${absents > 1 ? 's' : ''} seront effacée${absents > 1 ? 's' : ''} : personne n'est compté absent à une séance qui n'a pas eu lieu.`,
+              action: 'Annuler la séance',
+              danger: true,
+            }))
+          )
+            return;
           enregistrer.mutate();
         }}
       >

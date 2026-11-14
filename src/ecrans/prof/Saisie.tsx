@@ -15,7 +15,7 @@ interface Feuille {
   matiere: { id: string; nom: string; coefficient: number; classe: { id: string; nom: string } };
   sequence: Sequence;
   competence: string;
-  eleves: { inscriptionId: string; matricule: string; nom: string; prenoms: string; sexe: Sexe; note: number | null }[];
+  eleves: { inscriptionId: string; matricule: string; nom: string; prenoms: string; sexe: Sexe; note: number | null; numero: number }[];
 }
 
 // « 12,5 » ou « 12.5 » → 12.5 ; vide → null ; sinon NaN.
@@ -204,7 +204,7 @@ function FeuilleDeNotes({ matiereId, sequenceId }: { matiereId: string; sequence
                   const modifiee = modifiees.some(([id]) => id === e.inscriptionId);
                   return (
                     <tr key={e.inscriptionId}>
-                      <td className="tabular-nums text-encre-3">{i + 1}</td>
+                      <td className="tabular-nums text-encre-2">{e.numero}</td>
                       <td className="font-medium">
                         {e.nom} {e.prenoms}
                       </td>

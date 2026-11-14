@@ -9,6 +9,7 @@ import { MotDePasse } from '../ecrans/MotDePasse';
 import { Cadre } from './Cadre';
 import { Patienter } from './ui';
 import { ConfirmationDoublons } from '../lib/doublons';
+import { Confirmation } from '../lib/confirmation';
 
 export function Application({ children }: { children: ReactNode }) {
   const [client] = useState(
@@ -25,6 +26,7 @@ export function Application({ children }: { children: ReactNode }) {
       <FournisseurApp>
         <Portail>{children}</Portail>
         <ConfirmationDoublons />
+        <Confirmation />
         <Toaster position="bottom-right" toastOptions={{ className: 'font-sans text-sm' }} richColors closeButton />
       </FournisseurApp>
     </QueryClientProvider>

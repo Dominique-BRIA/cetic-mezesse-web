@@ -7,6 +7,7 @@ import { api } from '../../lib/api';
 import { useApp } from '../../lib/contexte';
 import type { Sequence } from '../../lib/types';
 import { Carte, Champ, Erreur, Etat, Modale, Page } from '../../components/ui';
+import { confirmer } from '../../lib/confirmation';
 
 export default function Annees() {
   const { a, annees, annee, choisirAnnee } = useApp();
@@ -117,7 +118,9 @@ export default function Annees() {
                     <button
                       type="button"
                       className="bouton-secondaire py-1.5"
-                      onClick={() => confirm(`Faire de ${x.libelle} l'année en cours ?`) && activer.mutate(x.id)}
+                      onClick={async () => {
+                        if (await confirmer({ titre: 'Changer d\'année en cours', message: `Faire de ${x.libelle} l'année en cours ?`, action: 'Rendre active' })) activer.mutate(x.id);
+                      }}
                     >
                       Rendre active
                     </button>

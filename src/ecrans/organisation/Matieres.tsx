@@ -9,6 +9,7 @@ import { requetes } from '../../lib/requetes';
 import { useApp } from '../../lib/contexte';
 import type { Enseignant, Groupe, Matiere } from '../../lib/types';
 import { Carte, Chargement, Champ, Erreur, Modale, Page, Vide } from '../../components/ui';
+import { confirmer } from '../../lib/confirmation';
 
 export default function Matieres() {
   const { a, annee } = useApp();
@@ -30,7 +31,11 @@ export default function Matieres() {
       try {
         await api(`/matieres/${m.id}`, { methode: 'DELETE' });
       } catch (e) {
-        if (e instanceof ErreurApi && e.statut === 409 && confirm(`${e.message}\n\nLes notes seront définitivement perdues.`)) {
+        if (
+          e instanceof ErreurApi &&
+          e.statut === 409 &&
+          (await confirmer({ titre: 'Supprimer aussi les notes', message: e.message, note: 'Les notes seront définitivement perdues.', action: 'Tout supprimer', danger: true }))
+        ) {
           await api(`/matieres/${m.id}?confirmer=oui`, { methode: 'DELETE' });
         } else throw e;
       }
@@ -132,7 +137,10 @@ export default function Matieres() {
                             type="button"
                             className="bouton-discret hover:text-danger"
                             aria-label="Supprimer"
-                            onClick={() => confirm(`Supprimer la matière « ${m.nom} » de ${m.classe.nom} ?`) && suppression.mutate(m)}
+                            onClick={async () => {
+                              if (await confirmer({ titre: 'Supprimer la matière', message: `« ${m.nom} » sera supprimée de ${m.classe.nom}.`, action: 'Supprimer', danger: true }))
+                                suppression.mutate(m);
+                            }}
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>

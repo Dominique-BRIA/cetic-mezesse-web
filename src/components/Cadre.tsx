@@ -24,7 +24,6 @@ import {
   Moon,
   PenLine,
   Settings,
-  ShieldCheck,
   Sigma,
   Stamp,
   Sun,
@@ -87,7 +86,6 @@ const SECTIONS: { titre: string | null; liens: Lien[] }[] = [
     liens: [
       { vers: '/appel', libelle: "Feuille d'appel", icone: CalendarCheck, roles: [P, SG] },
       { vers: '/absences', libelle: 'Absences', icone: UserX, roles: [P, SG] },
-      { vers: '/justifications', libelle: 'Justifications', icone: ShieldCheck, roles: [P, SG] },
       { vers: '/absences/bilan', libelle: 'Bilan des absences', icone: Sigma, roles: [P, SG] },
       { vers: '/absences/enseignants', libelle: 'Enseignants absents', icone: UserRoundX, roles: [P, SG] },
     ],
