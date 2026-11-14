@@ -3,8 +3,8 @@ import Link from 'next/link';
 import clsx from 'clsx';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { BellRing, Gavel, Loader2 } from 'lucide-react';
-import { api } from '../../lib/api';
+import { BellRing, FileSpreadsheet, FileText, Gavel, Loader2 } from 'lucide-react';
+import { api, telecharger } from '../../lib/api';
 import { requetes } from '../../lib/requetes';
 import { useApp } from '../../lib/contexte';
 import { useParametresUrl } from '../../lib/navigation';
@@ -292,10 +292,26 @@ export default function BilanAbsences() {
     onError: (e) => toast.error(e.message),
   });
 
+  // Le bilan affiché (classe et période) : PDF ouvert dans un onglet pour l'imprimer, ou classeur Excel.
+  const exporter = (format: 'xlsx' | 'pdf') =>
+    telecharger(`/absences/bilan/export?classeId=${classeId}&periode=${periode}&format=${format}`, { ouvrir: format === 'pdf' }).catch((e) =>
+      toast.error(e.message),
+    );
+
   return (
     <Page
       titre="Bilan des absences"
       description="Les heures de chaque élève pour la période, et la sanction que portera le bulletin. Les sanctions se décident sur les heures non justifiées cumulées depuis la rentrée."
+      actions={
+        <>
+          <button type="button" className="bouton-secondaire" onClick={() => exporter('xlsx')} disabled={!b?.eleves.length}>
+            <FileSpreadsheet className="h-4 w-4" /> Excel
+          </button>
+          <button type="button" className="bouton-secondaire" onClick={() => exporter('pdf')} disabled={!b?.eleves.length}>
+            <FileText className="h-4 w-4" /> PDF
+          </button>
+        </>
+      }
     >
       <div className="flex flex-wrap items-end gap-3">
         <Champ libelle="Classe" className="w-full max-w-xs">
@@ -383,9 +399,9 @@ export default function BilanAbsences() {
               <tr>
                 <td className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-encre-2">Classe · {libellePeriode(periode)}</td>
                 <td />
-                <td className="px-3 py-2 text-right font-semibold tabular-nums">{h(totaux.minutes)}</td>
-                <td className="px-3 py-2 text-right font-semibold tabular-nums text-succes">{h(totaux.j)}</td>
-                <td className="px-3 py-2 text-right font-semibold tabular-nums text-danger">{h(totaux.nj)}</td>
+                <td className="whitespace-nowrap px-3 py-2 text-right font-semibold tabular-nums">{h(totaux.minutes)}</td>
+                <td className="whitespace-nowrap px-3 py-2 text-right font-semibold tabular-nums text-succes">{h(totaux.j)}</td>
+                <td className="whitespace-nowrap px-3 py-2 text-right font-semibold tabular-nums text-danger">{h(totaux.nj)}</td>
                 <td colSpan={2} />
               </tr>
             </tfoot>
