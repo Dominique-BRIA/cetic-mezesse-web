@@ -2,8 +2,8 @@ import { useState } from 'react';
 import clsx from 'clsx';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { AlertTriangle, CalendarPlus, Clock, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
-import { api } from '../../lib/api';
+import { AlertTriangle, CalendarPlus, Clock, FileSpreadsheet, FileText, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
+import { api, telecharger } from '../../lib/api';
 import { envoyer, estAbandon, useCleEnvoi } from '../../lib/doublons';
 import { requetes } from '../../lib/requetes';
 import { useApp } from '../../lib/contexte';
@@ -79,6 +79,12 @@ export default function EmploiDuTemps() {
     queryFn: () => api<Vue>(`/emplois-du-temps?classeId=${classeId}${versionId ? `&versionId=${versionId}` : ''}`),
     enabled: Boolean(classeId),
   });
+  const exporter = (format: 'xlsx' | 'pdf') => {
+    const version = q.data?.version?.id;
+    telecharger(`/emplois-du-temps/export?classeId=${classeId}${version ? `&versionId=${version}` : ''}&format=${format}`, {
+      ouvrir: format === 'pdf',
+    }).catch((e) => toast.error(e.message));
+  };
   const matieres = useQuery({
     queryKey: ['matieres', annee?.id, classeId],
     queryFn: () => api<Matiere[]>(`/matieres?classeId=${classeId}`),
@@ -129,11 +135,21 @@ export default function EmploiDuTemps() {
       titre="Emploi du temps"
       description="La semaine type de chaque classe. Une nouvelle version, à partir d'une date, remplace la précédente pour les jours suivants ; les jours passés gardent l'ancienne."
       actions={
-        sg &&
         classeId && (
-          <button type="button" className="bouton-secondaire" onClick={() => setNouvelleVersion(true)}>
-            <CalendarPlus className="h-4 w-4" /> Nouvelle version
-          </button>
+          <>
+            {/* L'emploi du temps affiché (classe et version) : PDF à imprimer ou à afficher, classeur Excel. */}
+            <button type="button" className="bouton-secondaire" onClick={() => exporter('xlsx')} disabled={!q.data}>
+              <FileSpreadsheet className="h-4 w-4" /> Excel
+            </button>
+            <button type="button" className="bouton-secondaire" onClick={() => exporter('pdf')} disabled={!q.data}>
+              <FileText className="h-4 w-4" /> PDF
+            </button>
+            {sg && (
+              <button type="button" className="bouton-secondaire" onClick={() => setNouvelleVersion(true)}>
+                <CalendarPlus className="h-4 w-4" /> Nouvelle version
+              </button>
+            )}
+          </>
         )
       }
     >

@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { api } from '../../lib/api';
+import { toast } from 'sonner';
+import { FileSpreadsheet, FileText } from 'lucide-react';
+import { api, telecharger } from '../../lib/api';
 import { useApp } from '../../lib/contexte';
 import { useParametresUrl } from '../../lib/navigation';
 import { requetes } from '../../lib/requetes';
@@ -46,6 +48,11 @@ export default function EnseignantsAbsents() {
   const chemin = `/absences/enseignants?${new URLSearchParams(Object.entries({ du, au, enseignantId: ens }).filter(([, v]) => v)).toString()}`;
   const q = useQuery({ queryKey: ['absences-enseignants', annee?.id, chemin], queryFn: () => api<{ totaux: Total[]; seances: SeanceNonAssuree[] }>(chemin) });
   const d = q.data;
+  // Mêmes filtres que la page : PDF ouvert dans un onglet (à imprimer), classeur Excel téléchargé.
+  const exporter = (format: 'xlsx' | 'pdf') =>
+    telecharger(chemin.replace('/absences/enseignants?', '/absences/enseignants/export?') + `${chemin.endsWith('?') ? '' : '&'}format=${format}`, {
+      ouvrir: format === 'pdf',
+    }).catch((e) => toast.error(e.message));
   // Avec un enseignant choisi, seulement son total.
   const totaux = (d?.totaux ?? []).filter((t) => !ens || t.id === ens);
   const total = totaux.reduce((n, t) => n + t.minutes, 0);
@@ -58,6 +65,16 @@ export default function EnseignantsAbsents() {
     <Page
       titre="Enseignants absents"
       description="Les séances non assurées parce que l'enseignant prévu était absent, marquées par le SG sur la feuille d'appel. Une séance confiée à un remplaçant ou annulée n'y figure pas."
+      actions={
+        <>
+          <button type="button" className="bouton-secondaire" onClick={() => exporter('xlsx')} disabled={!d?.seances.length}>
+            <FileSpreadsheet className="h-4 w-4" /> Excel
+          </button>
+          <button type="button" className="bouton-secondaire" onClick={() => exporter('pdf')} disabled={!d?.seances.length}>
+            <FileText className="h-4 w-4" /> PDF
+          </button>
+        </>
+      }
     >
       <div className="flex flex-wrap items-end gap-3">
         <Champ libelle="Du">
