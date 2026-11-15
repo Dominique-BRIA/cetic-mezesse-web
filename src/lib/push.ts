@@ -16,6 +16,8 @@ const CONFIG = {
 const VAPID = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY;
 const CLE_JETON = 'cetic-push-jeton';
 const CLE_PLUS_TARD = 'cetic-push-plus-tard';
+/** Jeton à faire oublier par l'API (déconnexion pas encore confirmée : hors réseau, ou envoi interrompu). */
+const CLE_A_OUBLIER = 'cetic-push-a-oublier';
 
 function lire(cle: string) {
   try {
@@ -76,6 +78,8 @@ export async function abonner(): Promise<boolean> {
     const enregistrement = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
     const jeton = await m.getToken(m.getMessaging(app), { vapidKey: VAPID, serviceWorkerRegistration: enregistrement });
     if (!jeton) return false;
+    // Reconnexion avant que l'oubli ait abouti : ce jeton sert de nouveau, on ne le fait plus oublier.
+    if (lire(CLE_A_OUBLIER) === jeton) ecrire(CLE_A_OUBLIER, null);
     await api('/push/web', { methode: 'POST', corps: { jeton, navigateur: navigateur() }, annee: false });
     ecrire(CLE_JETON, jeton);
     return true;
@@ -99,7 +103,29 @@ export function desabonner() {
   const jeton = lire(CLE_JETON);
   if (!jeton) return;
   ecrire(CLE_JETON, null);
-  api('/push/web/retirer', { methode: 'POST', corps: { jeton }, annee: false }).catch(() => {});
+  // Noté d'abord : si la demande échoue (hors réseau, onglet fermé), elle repart plus tard.
+  ecrire(CLE_A_OUBLIER, jeton);
+  void envoyerOubli();
+}
+
+/**
+ * Fait oublier le jeton par l'API, sans session (elle a pu expirer) : détenir le jeton, que seul ce
+ * navigateur connaît, suffit. Réessayé à chaque ouverture du site et au retour du réseau.
+ */
+async function envoyerOubli() {
+  const jeton = lire(CLE_A_OUBLIER);
+  if (!jeton) return;
+  try {
+    await api('/push/web/oublier', { methode: 'POST', corps: { jeton }, annee: false });
+    if (lire(CLE_A_OUBLIER) === jeton) ecrire(CLE_A_OUBLIER, null);
+  } catch {
+    // hors réseau ou serveur indisponible : nouvel essai plus tard
+  }
+}
+
+if (typeof window !== 'undefined') {
+  setTimeout(() => void envoyerOubli(), 3000);
+  window.addEventListener('online', () => void envoyerOubli());
 }
 
 /** Notification reçue pendant que le site est ouvert : prévenu par le service worker (la cloche se recharge). */

@@ -51,6 +51,8 @@ export function FournisseurApp({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     quandSessionExpire(() => {
+      // Session expirée : ce navigateur ne reçoit plus les notifications du compte (oubli sans session).
+      desabonner();
       setUtilisateur(null);
       client.clear();
     });
