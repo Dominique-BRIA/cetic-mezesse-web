@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ArrowLeft, Camera, FileText, GitMerge, IdCard, Loader2, Pencil, UserMinus, UserPlus } from 'lucide-react';
+import { ArrowLeft, Camera, FileText, GitMerge, IdCard, Loader2, Pencil, Trash2, UserMinus, UserPlus } from 'lucide-react';
 import { api, telecharger, urlProtegee } from '../../lib/api';
 import { useApp } from '../../lib/contexte';
 import { date, PERIODES } from '../../lib/format';
@@ -11,6 +11,7 @@ import type { Classe, CodePeriode, Eleve, Inscription } from '../../lib/types';
 import { Carte, Chargement, Champ, Erreur, Etat, Modale, Page } from '../../components/ui';
 import { FormEleve } from './FormEleve';
 import { ChoixAutreEleve, FusionModale } from '../../components/Fusion';
+import { confirmer } from '../../lib/confirmation';
 
 type FicheData = Eleve & { inscriptions: Omit<Inscription, 'eleve'>[] };
 
@@ -36,6 +37,17 @@ export default function FicheEleve() {
     onSuccess: () => {
       toast.success('Photo enregistrée.');
       client.invalidateQueries({ queryKey: ['eleve', id] });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  // Photo erronée : retirée après confirmation (la décision peut être désapprouvée, ce qui la remet).
+  const retraitPhoto = useMutation({
+    mutationFn: () => api(`/eleves/${id}/photo`, { methode: 'DELETE' }),
+    onSuccess: () => {
+      toast.success('Photo supprimée.');
+      client.invalidateQueries({ queryKey: ['eleve', id] });
+      client.invalidateQueries({ queryKey: ['eleves'] });
     },
     onError: (e) => toast.error(e.message),
   });
@@ -98,6 +110,28 @@ export default function FicheEleve() {
             {photo.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
             {e.photoCle ? 'Changer la photo' : 'Ajouter une photo'}
           </button>
+          {e.photoCle && (
+            <button
+              type="button"
+              className="bouton-secondaire w-full text-danger"
+              disabled={retraitPhoto.isPending}
+              onClick={async () => {
+                if (
+                  await confirmer({
+                    titre: 'Supprimer la photo',
+                    message: `La photo de ${e.nom} ${e.prenoms} sera retirée de sa fiche, de ses bulletins et de sa carte scolaire.`,
+                    note: 'À utiliser pour une photo erronée. Sans photo, la carte scolaire ne peut pas être imprimée.',
+                    action: 'Supprimer la photo',
+                    danger: true,
+                  })
+                )
+                  retraitPhoto.mutate();
+              }}
+            >
+              {retraitPhoto.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              Supprimer la photo
+            </button>
+          )}
         </div>
 
         <div className="space-y-4">
