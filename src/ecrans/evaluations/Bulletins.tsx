@@ -23,7 +23,7 @@ export default function Bulletins() {
         <div className="space-y-4">
           <div className="flex flex-wrap items-end gap-3">
             <Champ libelle="Période">
-              <ChoixPeriode valeur={periode} changer={setPeriode} />
+              <ChoixPeriode valeur={periode} changer={setPeriode} sansAnnee />
             </Champ>
             <ModeSelection sel={sel} />
           </div>

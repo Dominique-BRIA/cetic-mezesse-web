@@ -285,10 +285,13 @@ export function ChoixPeriode({
   valeur,
   changer,
   sequencesSeulement,
+  sansAnnee,
 }: {
   valeur: CodePeriode;
   changer: (p: CodePeriode) => void;
   sequencesSeulement?: boolean;
+  /** Sans « Année complète » (bulletins : celui du 3e trimestre porte le bilan annuel). */
+  sansAnnee?: boolean;
 }) {
   return (
     <select
@@ -297,7 +300,7 @@ export function ChoixPeriode({
       onChange={(e) => changer(e.target.value as CodePeriode)}
       aria-label="Période"
     >
-      {PERIODES.filter((p) => !sequencesSeulement || p.code.startsWith('S')).map((p) => (
+      {PERIODES.filter((p) => (!sequencesSeulement || p.code.startsWith('S')) && (!sansAnnee || p.code !== 'A')).map((p) => (
         <option key={p.code} value={p.code}>
           {p.libelle}
         </option>

@@ -159,7 +159,7 @@ export default function FicheEleve() {
               <div className="flex flex-wrap items-end gap-3">
                 <Champ libelle="Période">
                   <select className="champ w-48" value={periode} onChange={(ev) => setPeriode(ev.target.value as CodePeriode)}>
-                    {PERIODES.map((p) => (
+                    {PERIODES.filter((p) => p.code !== 'A').map((p) => (
                       <option key={p.code} value={p.code}>
                         {p.libelle}
                       </option>
