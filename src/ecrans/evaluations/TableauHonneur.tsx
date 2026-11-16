@@ -87,6 +87,12 @@ export default function TableauHonneur() {
         {q.data && (
           <p className="mb-2 text-sm text-encre-2">
             {q.data.total} élève(s) au tableau d'honneur · {libellePeriode(periode)} · {q.data.annee}
+            {q.data.refusesAbsences ? (
+              <span className="text-alerte">
+                {' '}
+                · {q.data.refusesAbsences} écarté(s) pour {q.data.heuresRefus} h d'absence non justifiée ou plus
+              </span>
+            ) : null}
           </p>
         )}
       </div>

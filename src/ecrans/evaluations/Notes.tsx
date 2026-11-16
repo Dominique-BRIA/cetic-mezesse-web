@@ -16,7 +16,7 @@ import { exporterTableau } from '../../lib/export';
 interface Releve {
   classe: { id: string; nom: string; annee: string };
   matieres: { id: string; nom: string; coefficient: number; groupe: string; professeur: string | null; evaluee: boolean; moyenne: number | null }[];
-  eleves: { inscriptionId: string; eleveId: string; matricule: string; nom: string; prenoms: string; notes: (number | null)[]; moyenne: number | null; rang: Rang | null; numero: number }[];
+  eleves: { inscriptionId: string; eleveId: string; matricule: string; nom: string; prenoms: string; notes: (number | null)[]; moyenne: number | null; rang: Rang | null; numero: number; nonClasse?: boolean }[];
   profil: Profil;
 }
 
@@ -49,7 +49,7 @@ export default function Notes() {
       ],
       lignes: [
         ...tri(r.eleves).map((e) => ({
-          c: [rang(e.rang), e.numero, `${e.nom} ${e.prenoms}`, ...e.notes.map((n, i) => (r.matieres[i].evaluee ? note(n) : '')), note(e.moyenne)],
+          c: [e.nonClasse ? 'NC' : rang(e.rang), e.numero, `${e.nom} ${e.prenoms}`, ...e.notes.map((n, i) => (r.matieres[i].evaluee ? note(n) : '')), note(e.moyenne)],
         })),
         { c: ['', '', 'Moyenne de classe', ...r.matieres.map((m) => (m.evaluee ? note(m.moyenne) : '')), note(r.profil.moyenneGenerale)], gras: true },
       ],
@@ -165,7 +165,9 @@ function TableReleve({ classeId, periode }: { classeId: string; periode: CodePer
           <tbody>
             {tries.map((e) => (
               <tr key={e.inscriptionId}>
-                <td className="sticky left-0 bg-surface tabular-nums">{rang(e.rang)}</td>
+                <td className="sticky left-0 bg-surface tabular-nums" title={e.nonClasse ? 'Non classé : trop peu de matières composées' : undefined}>
+                  {e.nonClasse ? <span className="text-xs font-semibold text-alerte">NC</span> : rang(e.rang)}
+                </td>
                 <td className="sticky left-12 bg-surface">
                   <span className="mr-1.5 tabular-nums text-encre-2" title="Numéro d'ordre dans la classe">
                     {e.numero}.

@@ -207,6 +207,22 @@ export interface Etablissement {
   prefixeMatricule: string;
   sigleEn: string | null;
   seuilTableauHonneur: number;
+  reglesResultats: ReglesResultats;
+}
+
+/** Critère de départage de la première place. */
+export interface CritereDepartage {
+  type: 'GROUPE' | 'DISCIPLINE' | 'ALPHABETIQUE';
+  groupe?: string | null;
+}
+
+/** Règles des résultats réglées dans les paramètres. */
+export interface ReglesResultats {
+  moyenneDeliberation: number | null;
+  heuresRefusTableauHonneur: number | null;
+  seuilNonClasse: number;
+  seuilMatieresIgnorees: number;
+  criteres: CritereDepartage[];
 }
 
 /** Ligne du bloc « Discipline » du bulletin qui porte une sanction. */
@@ -239,6 +255,10 @@ export interface Attestation {
 
 export interface TableauHonneur {
   seuil: number;
+  /** Heures d'absence non justifiées qui refusent le tableau d'honneur (null : pas de limite). */
+  heuresRefus?: number | null;
+  /** Élèves qui atteignaient la moyenne mais écartés pour absences. */
+  refusesAbsences?: number;
   periode: CodePeriode;
   annee: string;
   total: number;

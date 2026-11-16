@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Loader2, Plus, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Loader2, Plus, Trash2 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { requetes } from '../../lib/requetes';
-import type { Etablissement, LigneBulletin, SanctionAbsence } from '../../lib/types';
+import type { CritereDepartage, Etablissement, LigneBulletin, SanctionAbsence } from '../../lib/types';
 import { Carte, Chargement, Champ, Erreur, Page } from '../../components/ui';
 import { useApp } from '../../lib/contexte';
 
@@ -16,6 +16,7 @@ export default function Parametres() {
     <Page titre="Paramètres" description="Ce qui s'imprime en tête des documents, les barèmes appliqués aux notes, le tableau d'honneur et les sanctions pour absences.">
       <FormEtablissement modifiable={sg} />
       <SeuilTableauHonneur />
+      <ReglesResultats />
       <Sanctions modifiable={sg} />
       <div className="grid gap-4 lg:grid-cols-2">
         <EditeurBareme type="GRADE" titre="Grades par matière" aide="Imprimés dans la colonne « Grade » du bulletin." modifiable={sg} />
@@ -56,6 +57,119 @@ function SeuilTableauHonneur() {
           Enregistrer
         </button>
       </div>
+    </Carte>
+  );
+}
+
+const nombre = (v: string) => (v.trim() === '' ? null : Number(v.replace(',', '.')));
+const texte = (v: number | null | undefined) => (v === null || v === undefined ? '' : String(v).replace('.', ','));
+const cle = (c: CritereDepartage) => (c.type === 'GROUPE' ? `GROUPE:${(c.groupe ?? '').toLowerCase()}` : c.type);
+
+/**
+ * Règles des résultats : délibération (moyenne annuelle), refus du tableau d'honneur pour absences, part des matières
+ * composées (non classé, matières ignorées) et ordre de départage de la première place.
+ */
+function ReglesResultats() {
+  const client = useQueryClient();
+  const { annee } = useApp();
+  const q = useQuery(requetes.etablissement());
+  const groupes = useQuery(requetes.groupes(annee?.id));
+  const [f, setF] = useState({ deliberation: '', heures: '', nonClasse: '', ignorees: '' });
+  // Tous les critères possibles, dans l'ordre choisi ; « actif » : pris en compte.
+  const [criteres, setCriteres] = useState<(CritereDepartage & { actif: boolean })[]>([]);
+  useEffect(() => {
+    if (!q.data || !groupes.data) return;
+    const r = q.data.reglesResultats;
+    setF({ deliberation: r.moyenneDeliberation === null ? '' : r.moyenneDeliberation.toFixed(2).replace('.', ','), heures: texte(r.heuresRefusTableauHonneur), nonClasse: texte(r.seuilNonClasse), ignorees: texte(r.seuilMatieresIgnorees) });
+    const noms = [...new Set(groupes.data.map((g) => g.nom))];
+    const possibles: CritereDepartage[] = [...noms.map((n) => ({ type: 'GROUPE' as const, groupe: n })), { type: 'DISCIPLINE' }, { type: 'ALPHABETIQUE' }];
+    // Sans réglage : les groupes « professionnels », puis la discipline, puis l'ordre alphabétique.
+    const choisis: CritereDepartage[] = r.criteres.length
+      ? r.criteres
+      : [...possibles.filter((c) => c.type === 'GROUPE' && /professionnel/i.test(c.groupe ?? '')), { type: 'DISCIPLINE' }, { type: 'ALPHABETIQUE' }];
+    const actifs = choisis.map((c) => ({ ...c, actif: true }));
+    const reste = possibles.filter((p) => !choisis.some((c) => cle(c) === cle(p))).map((c) => ({ ...c, actif: false }));
+    setCriteres([...actifs, ...reste]);
+  }, [q.data, groupes.data]);
+  const deplacer = (i: number, d: -1 | 1) =>
+    setCriteres((l) => {
+      const n = [...l];
+      [n[i], n[i + d]] = [n[i + d], n[i]];
+      return n;
+    });
+  const envoi = useMutation({
+    mutationFn: () =>
+      api('/etablissement/resultats', {
+        methode: 'PUT',
+        annee: false,
+        corps: {
+          moyenneDeliberation: nombre(f.deliberation),
+          heuresRefusTableauHonneur: nombre(f.heures),
+          seuilNonClasse: nombre(f.nonClasse),
+          seuilMatieresIgnorees: nombre(f.ignorees),
+          criteres: criteres.filter((c) => c.actif).map(({ type, groupe }) => ({ type, groupe: type === 'GROUPE' ? groupe : null })),
+        },
+      }),
+    onSuccess: () => {
+      toast.success('Règles des résultats enregistrées.');
+      for (const k of ['etablissement', 'tableau-honneur', 'releve', 'stats-etablissement', 'stats-classe']) client.invalidateQueries({ queryKey: [k] });
+    },
+  });
+  const libelle = (c: CritereDepartage) =>
+    c.type === 'GROUPE' ? `Moyenne du groupe « ${c.groupe} »` : c.type === 'DISCIPLINE' ? "Discipline : le moins d'heures d'absence non justifiées" : 'Ordre alphabétique des noms';
+  return (
+    <Carte titre="Résultats, classement et délibération">
+      {envoi.error ? (
+        <div className="mb-3">
+          <Erreur erreur={envoi.error} />
+        </div>
+      ) : null}
+      <div className="grid gap-x-6 gap-y-1 md:grid-cols-2">
+        <Champ libelle="Moyenne de délibération" aide="Sur la moyenne annuelle : à partir de cette moyenne, l'élève passe en classe supérieure après délibération (par exemple 9,00). Vide : pas de délibération. Sur les séquences et les trimestres, moins de 10 reste un échec.">
+          <input className="champ w-28 text-right tabular-nums" inputMode="decimal" placeholder="—" value={f.deliberation} onChange={(e) => setF({ ...f, deliberation: e.target.value })} />
+        </Champ>
+        <Champ libelle="Refus du tableau d'honneur (heures)" aide="À partir de ce nombre d'heures d'absence non justifiées sur la période, l'élève n'est pas inscrit au tableau d'honneur. Vide : pas de limite.">
+          <input className="champ w-28 text-right tabular-nums" inputMode="numeric" placeholder="—" value={f.heures} onChange={(e) => setF({ ...f, heures: e.target.value })} />
+        </Champ>
+        <Champ libelle="Non classé en dessous de (% des matières)" aide="Un élève qui a composé moins que cette part des matières évaluées n'est pas classé (1/3 : 33,33).">
+          <input className="champ w-28 text-right tabular-nums" inputMode="decimal" value={f.nonClasse} onChange={(e) => setF({ ...f, nonClasse: e.target.value })} />
+        </Champ>
+        <Champ libelle="Matières ignorées à partir de (% des matières)" aide="En dessous, les matières non composées valent 0 (leur coefficient compte) ; à partir de cette part (2/3 : 66,67), elles sont ignorées.">
+          <input className="champ w-28 text-right tabular-nums" inputMode="decimal" value={f.ignorees} onChange={(e) => setF({ ...f, ignorees: e.target.value })} />
+        </Champ>
+      </div>
+      <div className="mt-4">
+        <div className="text-sm font-semibold">Départage de la première place</div>
+        <p className="mb-2 text-xs text-encre-2">
+          Il n'y a qu'un seul premier : en cas d'égalité, ces critères sont appliqués dans l'ordre (cochez ceux qui comptent, rangez-les par importance). En dernier recours, un tirage au sort.
+          Les autres rangs gardent leurs ex æquo.
+        </p>
+        {groupes.isLoading ? (
+          <Chargement />
+        ) : (
+          <ol className="divide-y divide-bord rounded border border-bord">
+            {criteres.map((c, i) => (
+              <li key={cle(c)} className="flex items-center gap-3 px-3 py-2 text-sm">
+                <input type="checkbox" className="h-4 w-4" checked={c.actif} onChange={(e) => setCriteres((l) => l.map((x, k) => (k === i ? { ...x, actif: e.target.checked } : x)))} />
+                <span className={c.actif ? 'flex-1' : 'flex-1 text-encre-3'}>
+                  {c.actif && <span className="mr-2 font-semibold tabular-nums">{criteres.slice(0, i + 1).filter((x) => x.actif).length}.</span>}
+                  {libelle(c)}
+                </span>
+                <button type="button" className="bouton-discret" aria-label="Monter" disabled={i === 0} onClick={() => deplacer(i, -1)}>
+                  <ArrowUp className="h-4 w-4" />
+                </button>
+                <button type="button" className="bouton-discret" aria-label="Descendre" disabled={i === criteres.length - 1} onClick={() => deplacer(i, 1)}>
+                  <ArrowDown className="h-4 w-4" />
+                </button>
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
+      <button type="button" className="bouton-primaire mt-4" disabled={envoi.isPending || !f.nonClasse || !f.ignorees} onClick={() => envoi.mutate()}>
+        {envoi.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+        Enregistrer
+      </button>
     </Carte>
   );
 }
