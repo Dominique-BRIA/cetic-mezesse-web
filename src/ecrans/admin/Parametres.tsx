@@ -139,10 +139,9 @@ function ReglesResultats() {
         </Champ>
       </div>
       <div className="mt-4">
-        <div className="text-sm font-semibold">Départage de la première place</div>
+        <div className="text-sm font-semibold">Élève désigné parmi les ex æquo</div>
         <p className="mb-2 text-xs text-encre-2">
-          Il n'y a qu'un seul premier : en cas d'égalité, ces critères sont appliqués dans l'ordre (cochez ceux qui comptent, rangez-les par importance). En dernier recours, un tirage au sort.
-          Les autres rangs gardent leurs ex æquo.
+          Les rangs gardent leurs ex æquo, y compris à la première place. Quand plusieurs élèves sont ex æquo, à la première place comme à un autre rang, ces critères, dans l'ordre (cochez ceux qui comptent, rangez-les par importance), désignent celui qui porte son rang sans « ex » (par exemple « 1er » ou « 5e ») sur son bulletin et devant les autres ex æquo au tableau d'honneur. En dernier recours, un tirage au sort.
         </p>
         {groupes.isLoading ? (
           <Chargement />
