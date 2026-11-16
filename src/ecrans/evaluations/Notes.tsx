@@ -123,7 +123,8 @@ export default function Notes() {
 
 /** Par rang, puis par nom (les non classés à la fin). */
 function tri(eleves: Releve['eleves']) {
-  return [...eleves].sort((a, b) => (a.rang?.rang ?? 999) - (b.rang?.rang ?? 999) || a.nom.localeCompare(b.nom));
+  // Dans un groupe d'ex æquo, l'élève désigné (rang sans « ex », comme sur le bulletin) passe devant.
+  return [...eleves].sort((a, b) => (a.rang?.rang ?? 999) - (b.rang?.rang ?? 999) || Number(a.rang?.exAequo ?? 0) - Number(b.rang?.exAequo ?? 0) || a.nom.localeCompare(b.nom));
 }
 
 function TableReleve({ classeId, periode }: { classeId: string; periode: CodePeriode }) {
