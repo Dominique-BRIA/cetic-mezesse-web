@@ -141,7 +141,7 @@ function ReglesResultats() {
       <div className="mt-4">
         <div className="text-sm font-semibold">Élève désigné parmi les ex æquo</div>
         <p className="mb-2 text-xs text-encre-2">
-          Les rangs gardent leurs ex æquo, y compris à la première place. Quand plusieurs élèves sont ex æquo, à la première place comme à un autre rang, ces critères, dans l'ordre (cochez ceux qui comptent, rangez-les par importance), désignent celui qui porte son rang sans « ex » (par exemple « 1er » ou « 5e ») partout dans l'application (relevé de notes, classements, statistiques, bulletin) et devant les autres ex æquo au tableau d'honneur. En dernier recours, un tirage au sort.
+          Les rangs gardent leurs ex æquo, y compris à la première place. Quand plusieurs élèves sont ex æquo, à la première place comme à un autre rang, ces critères, dans l'ordre (cochez ceux qui comptent, rangez-les par importance), désignent celui qui porte son rang sans « ex » (par exemple « 1er » ou « 5e ») partout dans l'application (relevé de notes, classements, statistiques, bulletin, rangs par matière compris) et devant les autres ex æquo au tableau d'honneur. En dernier recours, un tirage au sort.
         </p>
         {groupes.isLoading ? (
           <Chargement />
